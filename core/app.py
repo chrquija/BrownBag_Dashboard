@@ -24,7 +24,7 @@ dashboard_objective = """
     margin-bottom: 2rem;
     line-height: 1.7;
     ">
-    <b>The ADVANTEC App</b> provides traffic engineering recommendations for the Coachella Valley through Machine Learning algorithms trained on <b>MILLIONS OF DATA POINTS to REDUCE Travel Time, Fuel Consumption, and Green House Gases</b> through identification of anomalies, provision of cycle length recommendations, and predictive analytics.
+    <b>The ADVANTEC App</b> provides traffic engineering recommendations for the Coachella Valley using <b>MILLIONS OF DATA POINTS trained on Machine Learning Algorithms to REDUCE Travel Time, Fuel Consumption, and Green House Gases</b> through identification of anomalies, provision of cycle length recommendations, and predictive analytics.
 </div>
 """
 
