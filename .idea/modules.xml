@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/ADVANTEC_AI.iml" filepath="$PROJECT_DIR$/.idea/ADVANTEC_AI.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/ADVANTEC-ai-traffic-dashboard.iml" filepath="$PROJECT_DIR$/.idea/ADVANTEC-ai-traffic-dashboard.iml" />
     </modules>
   </component>
 </project>
