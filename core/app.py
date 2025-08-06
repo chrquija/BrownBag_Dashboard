@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from Interactive_Map import create_corridor_map
 
 #page configuration
 st.set_page_config(
