@@ -36,5 +36,5 @@ st.markdown(dashboard_objective, unsafe_allow_html=True)
 df = pd.read_csv("https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/MOCK_DATA/mock_corridor_data.csv")
 
 
-st.title("🛣️ Corridor Analysis")
+st.header("🛣️ Corridor Analysis")
 
