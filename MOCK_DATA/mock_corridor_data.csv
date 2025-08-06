@@ -1,0 +1,9 @@
+origin,destination,lat1,lon1,lat2,lon2,date,hour,travel_time,speed
+Ave 52,Calle Tampico,33.6611,-116.2997,33.6658,-116.2997,4/11/2025,8,3.2,28
+Ave 52,Calle Tampico,33.6611,-116.2997,33.6658,-116.2997,4/11/2025,9,4.1,21
+Ave 52,Calle Tampico,33.6611,-116.2997,33.6658,-116.2997,4/12/2025,8,3.5,30
+Ave 52,Calle Tampico,33.6611,-116.2997,33.6658,-116.2997,4/12/2025,9,3.8,25
+Calle Tampico,Village Shop Center,33.6658,-116.2997,33.67,-116.295,4/11/2025,8,2.2,36
+Calle Tampico,Village Shop Center,33.6658,-116.2997,33.67,-116.295,4/11/2025,9,2.9,29
+Calle Tampico,Village Shop Center,33.6658,-116.2997,33.67,-116.295,4/12/2025,8,2.4,34
+Calle Tampico,Village Shop Center,33.6658,-116.2997,33.67,-116.295,4/12/2025,9,3.1,27
