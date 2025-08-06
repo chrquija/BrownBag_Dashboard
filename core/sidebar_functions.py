@@ -2,54 +2,6 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 
-# Date range and granularity selector
-with st.sidebar:
-    st.title("🛣️ Controls")
-
-    # Filter section
-    with st.expander("📊 Data Filters", expanded=True):
-        corridor = st.selectbox("Corridor", ["Option 1", "Option 2"])
-
-        # Date range selector
-        st.subheader("📅 Date Range")
-        date_range = st.date_input(
-            "Select Date Range",
-            value=(datetime.now() - timedelta(days=7), datetime.now()),
-            help="Choose start and end dates for analysis"
-        )
-
-        # Time granularity selector
-        st.subheader("⏰ Data Granularity")
-        granularity = st.selectbox(
-            "Aggregation Level",
-            options=["Hourly", "Daily", "Weekly", "Monthly"],
-            index=0,  # Default to hourly
-            help="Choose how to aggregate your hourly data"
-        )
-
-        # Optional: Time of day filter for hourly data
-        if granularity == "Hourly":
-            time_filter = st.selectbox(
-                "Time Period",
-                options=["All Hours", "Peak Hours (7-9 AM, 4-6 PM)", "AM Peak (7-9 AM)",
-                         "PM Peak (4-6 PM)", "Off-Peak", "Custom Range"],
-                help="Filter specific hours of the day"
-            )
-
-            if time_filter == "Custom Range":
-                col1, col2 = st.columns(2)
-                with col1:
-                    start_hour = st.selectbox("Start Hour", range(0, 24), index=7)
-                with col2:
-                    end_hour = st.selectbox("End Hour", range(1, 25), index=18)
-
-    # Analysis tools
-    with st.expander("🔧 Analysis Tools"):
-        show_anomalies = st.checkbox("Show Anomalies")
-        show_predictions = st.checkbox("Show Predictions")
-        confidence_level = st.slider("Confidence Level", 80, 99, 95)
-
-
 def process_traffic_data(df, date_range, granularity, time_filter=None, start_hour=None, end_hour=None):
     """
     Process traffic data based on date range and granularity selections
