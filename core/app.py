@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from map_utils import create_corridor_map
+from Interactive_Map import create_corridor_map
 
 #page configuration
 st.set_page_config(
@@ -34,7 +34,8 @@ st.markdown(dashboard_objective, unsafe_allow_html=True)
 
 
 # Load Data
-df = pd.read_csv("mock_corridor_data.csv")
+df = pd.read_csv("https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/MOCK_DATA/mock_corridor_data.csv")
+
 
 st.title("Interactive Corridor Travel Time Map")
 
