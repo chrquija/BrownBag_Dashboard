@@ -47,10 +47,6 @@ with st.sidebar:
         corridor = st.selectbox("Corridor", ["Option 1", "Option 2"])
         direction = st.radio("Direction", ["Northbound", "Southbound", "Both"])
 
-    # Display options
-    with st.expander("🎨 Display Options"):
-        chart_type = st.selectbox("Chart Type", ["Line", "Bar", "Area"])
-        color_scheme = st.selectbox("Color Scheme", ["Default", "Traffic", "Heat"])
 
     # Analysis tools
     with st.expander("🔧 Analysis Tools"):
