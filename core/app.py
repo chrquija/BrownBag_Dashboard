@@ -45,7 +45,6 @@ with st.sidebar:
     # Filter section
     with st.expander("📊 Data Filters", expanded=True):
         corridor = st.selectbox("Corridor", ["Option 1", "Option 2"])
-        direction = st.radio("Direction", ["Northbound", "Southbound", "Both"])
 
 
     # Analysis tools
