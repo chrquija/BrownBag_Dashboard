@@ -38,3 +38,38 @@ df = pd.read_csv("https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic
 
 st.header("🛣️ Corridor Analysis")
 
+
+# Create sidebar
+st.sidebar.title("🛣️ Dashboard Controls")
+
+# Add sidebar elements
+st.sidebar.header("Filters")
+
+# Example filter controls
+corridor = st.sidebar.selectbox(
+    "Select Corridor",
+    ["Avenue 52 → Calle Tampico", "Main Street → Oak Avenue", "Highway 111 → Desert Drive"]
+)
+
+date_range = st.sidebar.date_input(
+    "Select Date Range",
+    value=None
+)
+
+time_period = st.sidebar.selectbox(
+    "Time Period",
+    ["Morning Peak", "Evening Peak", "Off-Peak", "All Day"]
+)
+
+# Sidebar metrics or info
+st.sidebar.header("Quick Stats")
+st.sidebar.metric("Active Corridors", "12")
+st.sidebar.metric("Data Points", "2.3M")
+
+# Sidebar buttons
+if st.sidebar.button("Apply Filters"):
+    st.sidebar.success("Filters applied!")
+
+if st.sidebar.button("Reset"):
+    st.sidebar.info("Filters reset!")
+
