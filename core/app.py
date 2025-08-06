@@ -38,18 +38,3 @@ df = pd.read_csv("https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic
 
 st.header("🛣️ Corridor Analysis")
 
-# Sidebar with collapsible sections
-with st.sidebar:
-    st.title("🛣️ Controls")
-
-    # Filter section
-    with st.expander("📊 Data Filters", expanded=True):
-        corridor = st.selectbox("Corridor", ["Option 1", "Option 2"])
-
-
-    # Analysis tools
-    with st.expander("🔧 Analysis Tools"):
-        show_anomalies = st.checkbox("Show Anomalies")
-        show_predictions = st.checkbox("Show Predictions")
-        confidence_level = st.slider("Confidence Level", 80, 99, 95)
-
