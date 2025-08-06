@@ -2,16 +2,17 @@ import streamlit as st
 import pandas as pd
 from Interactive_Map import create_corridor_map
 
-
-# Page configuration
+#page configuration
 st.set_page_config(
     page_title="ADVANTEC WEB APP",
     page_icon="🛣️",
     layout="wide"
 )
 
+# 2. Main Title
 st.title("Active Transportation & Operations Management Dashboard")
 
+# 3. Centered, theme-adaptive dashboard objective/subheader
 dashboard_objective = """
 <div style="
     font-size: 1.15rem;
@@ -30,40 +31,42 @@ dashboard_objective = """
 
 st.markdown(dashboard_objective, unsafe_allow_html=True)
 
+
+
 # Load Data
 df = pd.read_csv("https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/MOCK_DATA/mock_corridor_data.csv")
+
+
+st.title("Interactive Corridor Travel Time Map")
 
 # Corridor selection
 df["corridor"] = df["origin"] + " → " + df["destination"]
 corridor_options = sorted(df["corridor"].unique())
 corridor = st.selectbox("Select Corridor", corridor_options)
 
-# --- FRIENDLY DATE FILTER (show as YYYY-MM-DD, not with time) ---
-df["date"] = pd.to_datetime(df["date"]).dt.date
-date_options = sorted(df["date"].unique())
-date = st.selectbox("Select Date", date_options)
+# Date filter
+dates = pd.to_datetime(df["date"].unique())
+date = st.selectbox("Select Date", dates)
 
 # Variable toggle
-variable = st.radio(
-    "Variable to visualize",
-    ["travel_time", "speed"],
-    format_func=lambda x: "Travel Time (min)" if x == "travel_time" else "Speed (mph)"
-)
+variable = st.radio("Variable to visualize", ["travel_time", "speed"], format_func=lambda x: "Travel Time (min)" if x == "travel_time" else "Speed (mph)")
 
 # Filtered Data
 filtered = df[
     (df["corridor"] == corridor) &
-    (df["date"] == date)
+    (pd.to_datetime(df["date"]) == pd.to_datetime(date))
 ]
 
 if filtered.empty:
     st.warning("No data for this selection.")
 else:
-    st.subheader(f"Map: {corridor} on {date} ({variable.replace('_',' ').title()})")
+    st.subheader(f"Map: {corridor} on {date.date()} ({variable.replace('_',' ').title()})")
     st.pydeck_chart(create_corridor_map(filtered, variable=variable))
 
+    # Line Chart below the map
     st.subheader(f"{variable.replace('_',' ').title()} by Hour")
     st.line_chart(filtered.set_index("hour")[variable])
 
+    # Data Table (optional)
     with st.expander("Show Data Table"):
         st.dataframe(filtered)
