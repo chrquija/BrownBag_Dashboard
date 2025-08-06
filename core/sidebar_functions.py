@@ -2,6 +2,50 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 
+#DATA LOADING FOR ALL DATASETS
+@st.cache_data
+def load_traffic_data():
+    """
+    Load and combine all corridor traffic data from GitHub
+    """
+    # Define all data sources with their URLs and descriptive names
+    data_sources = {
+        "Avenue 52 → Calle Tampico": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/1_2_LONG_NSB_Ave52_CalleTampico_WashSt_1hr_septojuly.csv",
+        "Calle Tampico → Village Shopping Ctr": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/2_3_LONG_NSB_CalleTampico_VillageShoppingCtr_WashSt_1hr_septojuly.csv",
+        "Village Shopping Ctr → Avenue 50": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/3_4_LONG_NSB_VillageShoppingCtr_Avenue50_WashSt_1hr_septojuly.csv",
+        "Avenue 50 → Sagebrush Ave": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/4_5_LONG_NSB_Ave50_SagebrushAve_WashSt_1hr_septojuly.csv",
+        "Sagebrush Ave → Eisenhower Dr": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/5_6_LONG_NSB_SagebrushAve_EisenhowerDr_WashSt_1hr_septojuly.csv",
+        "Eisenhower Dr → Avenue 48": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/6_7_LONG_NSB_EisenhowerDr_Avenue48_WashSt_1hr_septojuly.csv",
+        "Avenue 48 → Avenue 47": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/7_8_LONG_NSB_Ave48_Ave47_WashSt_1hr_septojuly.csv",
+        "Avenue 47 → Point Happy Simon": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/8_9_LONG_NSB_Ave47_PointHappySimon_WashSt_1hr_septojuly.csv",
+        "Point Happy Simon → Hwy 111": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/9_10_LONG_NSB_PointHappySimon_WashSt_1hr_septojuly.csv"
+    }
+    
+    # Load and combine all datasets
+    all_data = []
+    for segment_name, url in data_sources.items():
+        try:
+            df = pd.read_csv(url)
+            df['segment_name'] = segment_name  # Add readable segment name
+            all_data.append(df)
+        except Exception as e:
+            st.error(f"Error loading {segment_name}: {e}")
+    
+    # Combine all data
+    if all_data:
+        combined_df = pd.concat(all_data, ignore_index=True)
+        
+        # Convert datetime
+        combined_df['local_datetime'] = pd.to_datetime(combined_df['local_datetime'])
+        
+        # Sort by datetime
+        combined_df = combined_df.sort_values('local_datetime').reset_index(drop=True)
+        
+        return combined_df
+    else:
+        return pd.DataFrame()
+
+#FUNCTIONS FOR DATE RANGE FUNCTIONALITY
 def process_traffic_data(df, date_range, granularity, time_filter=None, start_hour=None, end_hour=None):
     """
     Process traffic data based on date range and granularity selections
@@ -39,7 +83,7 @@ def process_traffic_data(df, date_range, granularity, time_filter=None, start_ho
     # Aggregate based on granularity
     if granularity == "Daily":
         df['date_group'] = df['local_datetime'].dt.date
-        grouped = df.groupby(['date_group', 'corridor_id', 'direction']).agg({
+        grouped = df.groupby(['date_group', 'corridor_id', 'direction', 'segment_name']).agg({
             'average_delay': 'mean',
             'average_traveltime': 'mean',
             'average_speed': 'mean'
@@ -48,7 +92,7 @@ def process_traffic_data(df, date_range, granularity, time_filter=None, start_ho
 
     elif granularity == "Weekly":
         df['week_group'] = df['local_datetime'].dt.to_period('W').dt.start_time
-        grouped = df.groupby(['week_group', 'corridor_id', 'direction']).agg({
+        grouped = df.groupby(['week_group', 'corridor_id', 'direction', 'segment_name']).agg({
             'average_delay': 'mean',
             'average_traveltime': 'mean',
             'average_speed': 'mean'
@@ -57,7 +101,7 @@ def process_traffic_data(df, date_range, granularity, time_filter=None, start_ho
 
     elif granularity == "Monthly":
         df['month_group'] = df['local_datetime'].dt.to_period('M').dt.start_time
-        grouped = df.groupby(['month_group', 'corridor_id', 'direction']).agg({
+        grouped = df.groupby(['month_group', 'corridor_id', 'direction', 'segment_name']).agg({
             'average_delay': 'mean',
             'average_traveltime': 'mean',
             'average_speed': 'mean'
