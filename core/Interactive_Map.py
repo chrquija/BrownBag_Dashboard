@@ -1,11 +1,16 @@
 import pydeck as pdk
 
 def create_corridor_map(df, variable="travel_time"):
-    # Color: green (good), yellow, red (bad)
-    if variable == "travel_time":
-        get_color = "[255, 255 - min(travel_time*40, 255), 0]"
-    else:  # speed: higher = greener
-        get_color = "[255 - min(speed*7, 255), 255, 0]"
+    # Add a color column based on the selected variable
+    def compute_color(row):
+        if variable == "travel_time":
+            g = max(0, 255 - int(row['travel_time']*40))
+            return [255, g, 0]
+        else:
+            r = max(0, 255 - int(row['speed']*7))
+            return [r, 255, 0]
+    df = df.copy()
+    df['color'] = df.apply(compute_color, axis=1)
 
     layer = pdk.Layer(
         "LineLayer",
@@ -13,7 +18,7 @@ def create_corridor_map(df, variable="travel_time"):
         get_source_position=["lon1", "lat1"],
         get_target_position=["lon2", "lat2"],
         get_width=7,
-        get_color=get_color,
+        get_color="color",
         pickable=True,
         auto_highlight=True,
     )
@@ -30,3 +35,4 @@ def create_corridor_map(df, variable="travel_time"):
     }
 
     return pdk.Deck(layers=[layer], initial_view_state=view_state, tooltip=tooltip)
+
