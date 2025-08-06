@@ -38,38 +38,23 @@ df = pd.read_csv("https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic
 
 st.header("🛣️ Corridor Analysis")
 
+# Sidebar with collapsible sections
+with st.sidebar:
+    st.title("🛣️ Controls")
 
-# Create sidebar
-st.sidebar.title("🛣️ Dashboard Controls")
+    # Filter section
+    with st.expander("📊 Data Filters", expanded=True):
+        corridor = st.selectbox("Corridor", ["Option 1", "Option 2"])
+        direction = st.radio("Direction", ["Northbound", "Southbound", "Both"])
 
-# Add sidebar elements
-st.sidebar.header("Filters")
+    # Display options
+    with st.expander("🎨 Display Options"):
+        chart_type = st.selectbox("Chart Type", ["Line", "Bar", "Area"])
+        color_scheme = st.selectbox("Color Scheme", ["Default", "Traffic", "Heat"])
 
-# Example filter controls
-corridor = st.sidebar.selectbox(
-    "Select Corridor",
-    ["Avenue 52 → Calle Tampico", "Main Street → Oak Avenue", "Highway 111 → Desert Drive"]
-)
-
-date_range = st.sidebar.date_input(
-    "Select Date Range",
-    value=None
-)
-
-time_period = st.sidebar.selectbox(
-    "Time Period",
-    ["Morning Peak", "Evening Peak", "Off-Peak", "All Day"]
-)
-
-# Sidebar metrics or info
-st.sidebar.header("Quick Stats")
-st.sidebar.metric("Active Corridors", "12")
-st.sidebar.metric("Data Points", "2.3M")
-
-# Sidebar buttons
-if st.sidebar.button("Apply Filters"):
-    st.sidebar.success("Filters applied!")
-
-if st.sidebar.button("Reset"):
-    st.sidebar.info("Filters reset!")
+    # Analysis tools
+    with st.expander("🔧 Analysis Tools"):
+        show_anomalies = st.checkbox("Show Anomalies")
+        show_predictions = st.checkbox("Show Predictions")
+        confidence_level = st.slider("Confidence Level", 80, 99, 95)
 
