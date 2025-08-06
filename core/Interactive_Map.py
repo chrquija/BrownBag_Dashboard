@@ -1,5 +1,8 @@
 import pandas as pd
+import streamlit as st
+import pydeck as pdk
 
+# Sample data for intersections
 data = [
     {"name": "Ave 52", "lat": 33.66109, "lon": -116.29970},
     {"name": "Avenida Nuestra", "lat": 33.66578, "lon": -116.29970},
@@ -8,33 +11,31 @@ data = [
 ]
 df = pd.DataFrame(data)
 
-import streamlit as st
-import pydeck as pdk
+st.title("Interactive Dashboard Map")
+st.write("Hover over the red dots to see intersection names")
 
-# DataFrame from above (df)
-
-# Create a line for the corridor
-corridor_line = pdk.Layer(
-    "LineLayer",
-    data=df,
-    get_source_position="[lon, lat]",
-    get_target_position="[lon, lat]",
-    get_color=[0, 150, 255],
-    get_width=4,
-    pickable=False,
-)
-
-# Create dots for intersections
+# Option 1: Just show the intersection points (recommended for your current data)
 dots = pdk.Layer(
     "ScatterplotLayer",
     data=df,
     get_position="[lon, lat]",
-    get_color=[255, 0, 0],
-    get_radius=40,
+    get_color=[255, 0, 0, 160],  # Added transparency
+    get_radius=50,
     pickable=True,
 )
 
-# Pydeck map
+# Option 2: If you want to connect the points with a path, use PathLayer
+path_data = [{"path": [[row['lon'], row['lat']] for _, row in df.iterrows()]}]
+path_layer = pdk.Layer(
+    "PathLayer",
+    data=path_data,
+    get_path="path",
+    get_color=[0, 150, 255, 100],
+    get_width=5,
+    pickable=False,
+)
+
+# Set up the map view
 view_state = pdk.ViewState(
     latitude=df['lat'].mean(),
     longitude=df['lon'].mean(),
@@ -42,11 +43,24 @@ view_state = pdk.ViewState(
     pitch=0
 )
 
+# Create the map (choose one of the options below)
+
+# Option A: Just intersection points
 st.pydeck_chart(
     pdk.Deck(
         map_style="mapbox://styles/mapbox/light-v9",
         initial_view_state=view_state,
-        layers=[corridor_line, dots],
-        tooltip={"text": "{name}"},
+        layers=[dots],
+        tooltip={"text": "📍 {name}"},
     )
 )
+
+# Option B: Points connected by a path (uncomment to use)
+# st.pydeck_chart(
+#     pdk.Deck(
+#         map_style="mapbox://styles/mapbox/light-v9",
+#         initial_view_state=view_state,
+#         layers=[path_layer, dots],
+#         tooltip={"text": "📍 {name}"},
+#     )
+# )
