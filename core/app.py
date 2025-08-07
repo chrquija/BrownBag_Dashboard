@@ -31,7 +31,9 @@ dashboard_objective = """
 """
 
 st.markdown(dashboard_objective, unsafe_allow_html=True)
-st.header("🛣️ Corridor Analysis")
+
+#Title of center analysis content
+st.header("🛣️ Washington Street Corridor Analysis")
 
 # Load Data with progress indicator
 with st.spinner('Loading traffic data from all corridor segments...'):
@@ -99,8 +101,10 @@ with st.sidebar:
         show_predictions = st.checkbox("Show Predictions")
         confidence_level = st.slider("Confidence Level", 80, 99, 95)
 
-# Main content
-st.header("🛣️ Washington Street Corridor Analysis")
+
+
+
+# Main content of Corridor Analysis (Map, Tables, Summary)
 
 # Filter data by selected corridor
 if corridor != "All Segments":
