@@ -32,158 +32,80 @@ dashboard_objective = """
 
 st.markdown(dashboard_objective, unsafe_allow_html=True)
 
-#Title of center analysis content
-st.header("🛣️ Washington Street Corridor Analysis")
+# Create tabs for different analyses
+tab1, tab2 = st.tabs(["🛣️ Corridor Performance", "🚦 Intersection Volumes"])
 
-# Load both types of data with progress indicator
-with st.spinner('Loading traffic data from all corridor segments and intersections...'):
-    corridor_df = load_traffic_data()
-    volume_df = load_volume_data()
+with tab1:
+    st.header("Washington Street Corridor Analysis")
+    
+    # Load corridor data
+    with st.spinner('Loading corridor data...'):
+        corridor_df = load_traffic_data()
 
-if corridor_df.empty:
-    st.error("Failed to load corridor data. Please check your connection.")
-    st.stop()
+    if corridor_df.empty:
+        st.error("Failed to load corridor data.")
+    else:
+        # Get available corridors
+        corridor_options = ["All Segments"] + sorted(corridor_df['segment_name'].unique().tolist())
 
-if volume_df.empty:
-    st.warning("Failed to load volume data, but corridor analysis will continue.")
-
-# Get available options from both datasets
-corridor_options = ["All Segments"] + sorted(corridor_df['segment_name'].unique().tolist())
-intersection_options = ["All Intersections"]
-if not volume_df.empty:
-    intersection_options += sorted(volume_df['intersection_name'].unique().tolist())
-
-# Sidebar
-with st.sidebar:
-    st.title("🛣️ Controls")
-
-    # Data Type Selection
-    with st.expander("📊 Data Type", expanded=True):
-        data_type = st.selectbox(
-            "Analysis Type",
-            options=["Corridor Performance", "Intersection Volumes", "Combined Analysis"],
-            help="Choose the type of analysis to perform"
-        )
-
-    # Filter section
-    with st.expander("🔍 Data Filters", expanded=True):
-        if data_type == "Corridor Performance":
-            # Corridor selection
-            corridor = st.selectbox("Corridor Segment", corridor_options)
-            selected_df = corridor_df
-            min_date = corridor_df['local_datetime'].dt.date.min()
-            max_date = corridor_df['local_datetime'].dt.date.max()
+        # Sidebar for corridor analysis
+        with st.sidebar:
+            st.title("🛣️ Corridor Controls")
             
-        elif data_type == "Intersection Volumes":
-            # Intersection selection
-            intersection = st.selectbox("Intersection", intersection_options)
-            selected_df = volume_df
-            if not volume_df.empty:
-                min_date = volume_df['local_datetime'].dt.date.min()
-                max_date = volume_df['local_datetime'].dt.date.max()
-            else:
-                min_date = max_date = None
+            with st.expander("📊 Corridor Filters", expanded=True):
+                corridor = st.selectbox("Corridor Segment", corridor_options)
+
+                # Date range selector
+                min_date = corridor_df['local_datetime'].dt.date.min()
+                max_date = corridor_df['local_datetime'].dt.date.max()
                 
-        else:  # Combined Analysis
-            corridor = st.selectbox("Corridor Segment", corridor_options)
-            intersection = st.selectbox("Intersection", intersection_options)
-            # Use corridor data as primary for date range
-            selected_df = corridor_df
-            min_date = corridor_df['local_datetime'].dt.date.min()
-            max_date = corridor_df['local_datetime'].dt.date.max()
+                st.subheader("📅 Date Range")
+                st.info(f"Available data: {min_date} to {max_date}")
+                
+                date_range = st.date_input(
+                    "Select Date Range",
+                    value=(min_date, max_date),
+                    min_value=min_date,
+                    max_value=max_date
+                )
 
-        # Date range selector
-        if min_date and max_date:
-            st.subheader("📅 Date Range")
-            st.info(f"Available data: {min_date} to {max_date}")
-            
-            date_range = st.date_input(
-                "Select Date Range",
-                value=(min_date, max_date),
-                min_value=min_date,
-                max_value=max_date,
-                help="Choose start and end dates for analysis"
-            )
-        else:
-            st.error("No date range available")
-            date_range = ()
+                # Time granularity
+                st.subheader("⏰ Data Granularity")
+                granularity = st.selectbox(
+                    "Aggregation Level",
+                    options=["Hourly", "Daily", "Weekly", "Monthly"],
+                    index=0
+                )
 
-        # Time granularity selector
-        st.subheader("⏰ Data Granularity")
-        granularity = st.selectbox(
-            "Aggregation Level",
-            options=["Hourly", "Daily", "Weekly", "Monthly"],
-            index=0,
-            help="Choose how to aggregate your hourly data"
-        )
+                # Time filters for hourly data
+                if granularity == "Hourly":
+                    time_filter = st.selectbox(
+                        "Time Period",
+                        options=["All Hours", "Peak Hours (7-9 AM, 4-6 PM)", "AM Peak (7-9 AM)",
+                                 "PM Peak (4-6 PM)", "Off-Peak", "Custom Range"]
+                    )
 
-        # Time of day filter for hourly data
-        if granularity == "Hourly":
-            time_filter = st.selectbox(
-                "Time Period",
-                options=["All Hours", "Peak Hours (7-9 AM, 4-6 PM)", "AM Peak (7-9 AM)",
-                         "PM Peak (4-6 PM)", "Off-Peak", "Custom Range"],
-                help="Filter specific hours of the day"
-            )
+                    if time_filter == "Custom Range":
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            start_hour = st.selectbox("Start Hour", range(0, 24), index=7)
+                        with col2:
+                            end_hour = st.selectbox("End Hour", range(1, 25), index=18)
 
-            if time_filter == "Custom Range":
-                col1, col2 = st.columns(2)
-                with col1:
-                    start_hour = st.selectbox("Start Hour", range(0, 24), index=7)
-                with col2:
-                    end_hour = st.selectbox("End Hour", range(1, 25), index=18)
+            with st.expander("🔧 Analysis Tools"):
+                show_anomalies = st.checkbox("Show Anomalies")
+                show_predictions = st.checkbox("Show Predictions")
+                confidence_level = st.slider("Confidence Level", 80, 99, 95)
 
-    # Analysis tools
-    with st.expander("🔧 Analysis Tools"):
-        show_anomalies = st.checkbox("Show Anomalies")
-        show_predictions = st.checkbox("Show Predictions")
-        confidence_level = st.slider("Confidence Level", 80, 99, 95)
-
-# Main content based on data type selection
-if len(date_range) == 2:
-    
-    if data_type == "Corridor Performance":
-        st.subheader("📈 Corridor Performance Analysis")
-        
-        # Filter data by selected corridor
-        if corridor != "All Segments":
-            display_df = corridor_df[corridor_df['segment_name'] == corridor].copy()
-        else:
-            display_df = corridor_df.copy()
-
-        # Process the data
-        filtered_data = process_traffic_data(
-            display_df, date_range, granularity,
-            time_filter if granularity == "Hourly" and 'time_filter' in locals() else None,
-            start_hour if 'start_hour' in locals() else None,
-            end_hour if 'end_hour' in locals() else None
-        )
-        
-        # Display corridor metrics
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Records", f"{len(filtered_data):,}")
-        with col2:
-            st.metric("Segments", filtered_data['segment_name'].nunique())
-        with col3:
-            st.metric("Date Range", f"{len(filtered_data['local_datetime'].dt.date.unique())} days")
-        with col4:
-            avg_speed = filtered_data['average_speed'].mean()
-            st.metric("Avg Speed", f"{avg_speed:.1f} mph")
-    
-    elif data_type == "Intersection Volumes":
-        st.subheader("🚦 Intersection Volume Analysis")
-        
-        if volume_df.empty:
-            st.error("Volume data not available")
-        else:
-            # Filter data by selected intersection
-            if intersection != "All Intersections":
-                display_df = volume_df[volume_df['intersection_name'] == intersection].copy()
+        # Process corridor data
+        if len(date_range) == 2:
+            # Filter data by selected corridor
+            if corridor != "All Segments":
+                display_df = corridor_df[corridor_df['segment_name'] == corridor].copy()
             else:
-                display_df = volume_df.copy()
+                display_df = corridor_df.copy()
 
-            # Process the volume data
+            # Process the data
             filtered_data = process_traffic_data(
                 display_df, date_range, granularity,
                 time_filter if granularity == "Hourly" and 'time_filter' in locals() else None,
@@ -191,87 +113,108 @@ if len(date_range) == 2:
                 end_hour if 'end_hour' in locals() else None
             )
             
-            # Display volume metrics
+            # Display metrics
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric("Total Records", f"{len(filtered_data):,}")
             with col2:
-                st.metric("Intersections", filtered_data['intersection_name'].nunique() if 'intersection_name' in filtered_data.columns else 0)
+                st.metric("Segments", filtered_data['segment_name'].nunique())
             with col3:
                 st.metric("Date Range", f"{len(filtered_data['local_datetime'].dt.date.unique())} days")
             with col4:
-                if 'total_volume' in filtered_data.columns:
-                    avg_volume = filtered_data['total_volume'].mean()
+                avg_speed = filtered_data['average_speed'].mean()
+                st.metric("Avg Speed", f"{avg_speed:.1f} mph")
+            
+            # Data preview
+            with st.expander("📊 Corridor Data Preview"):
+                st.dataframe(filtered_data.head(100))
+        else:
+            st.warning("Please select both start and end dates")
+
+with tab2:
+    st.header("Washington Street Intersection Volumes")
+    
+    # Load volume data
+    with st.spinner('Loading volume data...'):
+        volume_df = load_volume_data()
+
+    if volume_df.empty:
+        st.error("Failed to load volume data.")
+    else:
+        # Get available intersections
+        intersection_options = ["All Intersections"] + sorted(volume_df['intersection_name'].unique().tolist())
+
+        # Sidebar for volume analysis
+        with st.sidebar:
+            st.title("🚦 Volume Controls")
+            
+            with st.expander("📊 Volume Filters", expanded=True):
+                intersection = st.selectbox("Intersection", intersection_options)
+
+                # Date range selector
+                min_date = volume_df['local_datetime'].dt.date.min()
+                max_date = volume_df['local_datetime'].dt.date.max()
+                
+                st.subheader("📅 Date Range")
+                st.info(f"Available data: {min_date} to {max_date}")
+                
+                date_range_vol = st.date_input(
+                    "Select Date Range",
+                    value=(min_date, max_date),
+                    min_value=min_date,
+                    max_value=max_date,
+                    key="volume_date_range"
+                )
+
+                # Time granularity
+                st.subheader("⏰ Data Granularity")
+                granularity_vol = st.selectbox(
+                    "Aggregation Level",
+                    options=["Hourly", "Daily", "Weekly", "Monthly"],
+                    index=0,
+                    key="volume_granularity"
+                )
+
+                # Time filters for hourly data
+                if granularity_vol == "Hourly":
+                    time_filter_vol = st.selectbox(
+                        "Time Period",
+                        options=["All Hours", "Peak Hours (7-9 AM, 4-6 PM)", "AM Peak (7-9 AM)",
+                                 "PM Peak (4-6 PM)", "Off-Peak", "Custom Range"],
+                        key="volume_time_filter"
+                    )
+
+        # Process volume data
+        if len(date_range_vol) == 2:
+            # Filter data by selected intersection
+            if intersection != "All Intersections":
+                display_df = volume_df[volume_df['intersection_name'] == intersection].copy()
+            else:
+                display_df = volume_df.copy()
+
+            # Process the data
+            filtered_volume_data = process_traffic_data(
+                display_df, date_range_vol, granularity_vol,
+                time_filter_vol if granularity_vol == "Hourly" and 'time_filter_vol' in locals() else None
+            )
+            
+            # Display metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Records", f"{len(filtered_volume_data):,}")
+            with col2:
+                st.metric("Intersections", filtered_volume_data['intersection_name'].nunique() if 'intersection_name' in filtered_volume_data.columns else 0)
+            with col3:
+                st.metric("Date Range", f"{len(filtered_volume_data['local_datetime'].dt.date.unique())} days")
+            with col4:
+                if 'total_volume' in filtered_volume_data.columns:
+                    avg_volume = filtered_volume_data['total_volume'].mean()
                     st.metric("Avg Hourly Volume", f"{avg_volume:.0f} vehicles")
                 else:
                     st.metric("Avg Volume", "N/A")
-    
-    else:  # Combined Analysis
-        st.subheader("🔄 Combined Corridor & Volume Analysis")
-        
-        # Process corridor data
-        if corridor != "All Segments":
-            corridor_display_df = corridor_df[corridor_df['segment_name'] == corridor].copy()
+            
+            # Data preview
+            with st.expander("📊 Volume Data Preview"):
+                st.dataframe(filtered_volume_data.head(100))
         else:
-            corridor_display_df = corridor_df.copy()
-
-        filtered_corridor_data = process_traffic_data(
-            corridor_display_df, date_range, granularity,
-            time_filter if granularity == "Hourly" and 'time_filter' in locals() else None,
-            start_hour if 'start_hour' in locals() else None,
-            end_hour if 'end_hour' in locals() else None
-        )
-        
-        # Process volume data
-        if not volume_df.empty:
-            if intersection != "All Intersections":
-                volume_display_df = volume_df[volume_df['intersection_name'] == intersection].copy()
-            else:
-                volume_display_df = volume_df.copy()
-
-            filtered_volume_data = process_traffic_data(
-                volume_display_df, date_range, granularity,
-                time_filter if granularity == "Hourly" and 'time_filter' in locals() else None,
-                start_hour if 'start_hour' in locals() else None,
-                end_hour if 'end_hour' in locals() else None
-            )
-        else:
-            filtered_volume_data = pd.DataFrame()
-        
-        # Display combined metrics
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            corridor_records = len(filtered_corridor_data)
-            volume_records = len(filtered_volume_data) if not filtered_volume_data.empty else 0
-            st.metric("Total Records", f"{corridor_records + volume_records:,}")
-        with col2:
-            st.metric("Corridor Segments", filtered_corridor_data['segment_name'].nunique())
-        with col3:
-            volume_intersections = filtered_volume_data['intersection_name'].nunique() if not filtered_volume_data.empty and 'intersection_name' in filtered_volume_data.columns else 0
-            st.metric("Volume Intersections", volume_intersections)
-        with col4:
-            avg_speed = filtered_corridor_data['average_speed'].mean()
-            st.metric("Avg Speed", f"{avg_speed:.1f} mph")
-
-    # Data Preview Section
-    with st.expander("📊 Data Preview", expanded=False):
-        if data_type == "Corridor Performance":
-            st.subheader("Corridor Data Sample")
-            st.dataframe(filtered_data.head(100))
-        elif data_type == "Intersection Volumes":
-            st.subheader("Volume Data Sample")
-            st.dataframe(filtered_data.head(100))
-        else:  # Combined
-            col1, col2 = st.columns(2)
-            with col1:
-                st.subheader("Corridor Data Sample")
-                st.dataframe(filtered_corridor_data.head(50))
-            with col2:
-                st.subheader("Volume Data Sample")
-                if not filtered_volume_data.empty:
-                    st.dataframe(filtered_volume_data.head(50))
-                else:
-                    st.info("No volume data available")
-        
-else:
-    st.warning("Please select both start and end dates")
+            st.warning("Please select both start and end dates")
