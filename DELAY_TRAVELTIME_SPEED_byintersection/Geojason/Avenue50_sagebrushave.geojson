@@ -1,1 +1,0 @@
-{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"customer_route_number": 19, "name": "#4-5 NB: Avenue 50 -> Sagebrush Ave", "description": "NB: Washington St & Avenue 50 -> Washington St & Sagebrush Ave", "shared": true}, "geometry": {"type": "LineString", "coordinates": [[-116.29476, 33.68538], [-116.29474, 33.68843], [-116.29473, 33.68902]]}}]}
