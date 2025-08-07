@@ -64,8 +64,6 @@ def load_volume_data():
         # Create readable intersection names from intersection_id
         volume_df['intersection_name'] = volume_df['intersection_id'].str.replace('_', ' & ').str.replace('St', 'St')
         
-        st.sidebar.success(f"✅ Volume data loaded: {len(volume_df):,} records from {volume_df['intersection_id'].nunique()} intersections")
-        
         return volume_df
         
     except Exception as e:
