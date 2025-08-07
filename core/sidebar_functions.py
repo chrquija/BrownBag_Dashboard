@@ -61,8 +61,14 @@ def load_volume_data():
         # Sort by datetime
         volume_df = volume_df.sort_values('local_datetime').reset_index(drop=True)
         
-        # Create readable intersection names from intersection_id
-        volume_df['intersection_name'] = volume_df['intersection_id'].str.replace('_', ' & ').str.replace('St', 'St')
+        # Create proper intersection names from intersection_id
+        # Replace underscores with spaces first, then fix the formatting
+        volume_df['intersection_name'] = (
+            volume_df['intersection_id']
+            .str.replace('_', ' ')  # Replace underscores with spaces
+            .str.replace('Washington St and ', 'Washington St & ')  # Fix the main intersection format
+            .str.replace(' and ', ' & ')  # Replace any remaining 'and' with '&'
+        )
         
         return volume_df
         
