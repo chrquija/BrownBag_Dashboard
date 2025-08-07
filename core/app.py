@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from sidebar_functions import process_traffic_data, load_traffic_data, load_volume_data
 from datetime import datetime, timedelta
+import numpy as np
 
 # page configuration
 st.set_page_config(
@@ -36,10 +37,11 @@ st.markdown(dashboard_objective, unsafe_allow_html=True)
 st.info("🔍 **Research Question**: What are the main bottlenecks (slowest intersections) on Washington St that are most prone to causing an increase in Travel Time?")
 
 # Create tabs for different analyses
-tab1, tab2 = st.tabs(["🛣️ Corridor Bottleneck Analysis", "🚦 Intersection Volume Impact"])
+tab1, tab2 = st.tabs(["🚧 Performance & Delay Analysis", "📊 Traffic Demand & Capacity Analysis"])
 
 with tab1:
-    st.header("Washington Street Corridor Bottleneck Analysis")
+    st.header("🚧 Segment Performance & Travel Time Analysis")
+    st.subheader("*Identifying segments with highest delays, slowest speeds, and longest travel times*")
     
     # Load corridor data
     with st.spinner('Loading corridor performance data...'):
@@ -53,7 +55,7 @@ with tab1:
 
         # Sidebar for corridor analysis
         with st.sidebar:
-            st.title("🛣️ Bottleneck Controls")
+            st.title("🚧 Performance Controls")
             
             with st.expander("📊 Analysis Filters", expanded=True):
                 corridor = st.selectbox("Corridor Segment", corridor_options)
@@ -111,106 +113,187 @@ with tab1:
                 end_hour if 'end_hour' in locals() else None
             )
             
-            # BOTTLENECK-FOCUSED METRICS
-            col1, col2, col3, col4 = st.columns(4)
+            # ADVANCED PERFORMANCE METRICS
+            col1, col2, col3, col4, col5 = st.columns(5)
             with col1:
                 max_delay = filtered_data['average_delay'].max()
+                p95_delay = filtered_data['average_delay'].quantile(0.95)
                 st.metric("Worst Delay", f"{max_delay:.1f} sec", 
-                         help="Highest average delay recorded in selected timeframe")
+                         delta=f"95th %tile: {p95_delay:.1f}s",
+                         help="Highest delay vs 95th percentile")
             with col2:
                 max_travel_time = filtered_data['average_traveltime'].max()
-                st.metric("Longest Travel Time", f"{max_travel_time:.1f} min",
-                         help="Highest average travel time recorded")
+                median_travel_time = filtered_data['average_traveltime'].median()
+                st.metric("Peak Travel Time", f"{max_travel_time:.1f} min",
+                         delta=f"Median: {median_travel_time:.1f}m",
+                         help="Peak vs typical travel time")
             with col3:
                 min_speed = filtered_data['average_speed'].min()
-                st.metric("Slowest Speed", f"{min_speed:.1f} mph",
-                         help="Lowest average speed recorded (indicates congestion)")
+                mean_speed = filtered_data['average_speed'].mean()
+                st.metric("Congestion Speed", f"{min_speed:.1f} mph",
+                         delta=f"Avg: {mean_speed:.1f} mph",
+                         help="Slowest speed vs average")
             with col4:
-                avg_delay = filtered_data['average_delay'].mean()
-                st.metric("Average Delay", f"{avg_delay:.1f} sec",
-                         help="Overall average delay across all segments")
+                # Performance consistency (coefficient of variation for travel time)
+                cv_traveltime = (filtered_data['average_traveltime'].std() / 
+                               filtered_data['average_traveltime'].mean()) * 100
+                st.metric("Travel Time Reliability", f"{cv_traveltime:.1f}%",
+                         help="Lower % = more reliable (coefficient of variation)")
+            with col5:
+                # Speed drop severity
+                speed_range = filtered_data['average_speed'].max() - filtered_data['average_speed'].min()
+                st.metric("Speed Variability", f"{speed_range:.1f} mph",
+                         help="Difference between fastest and slowest speeds")
             
-            # BOTTLENECK IDENTIFICATION TABLE
-            st.subheader("🚨 Top Bottleneck Segments (Ranked by Travel Time)")
+            # ADVANCED BOTTLENECK IDENTIFICATION
+            st.subheader("🚨 Critical Performance Analysis")
             
-            # Create bottleneck ranking
-            bottleneck_summary = filtered_data.groupby(['segment_name', 'direction']).agg({
-                'average_delay': ['mean', 'max'],
-                'average_traveltime': ['mean', 'max'], 
-                'average_speed': ['mean', 'min']
+            # Create comprehensive performance scoring
+            performance_analysis = filtered_data.groupby(['segment_name', 'direction']).agg({
+                'average_delay': ['mean', 'max', 'std', lambda x: x.quantile(0.95)],
+                'average_traveltime': ['mean', 'max', 'std', lambda x: x.quantile(0.95)], 
+                'average_speed': ['mean', 'min', 'std']
             }).round(2)
             
             # Flatten column names
-            bottleneck_summary.columns = ['_'.join(col).strip() for col in bottleneck_summary.columns]
-            bottleneck_summary = bottleneck_summary.reset_index()
+            performance_analysis.columns = ['_'.join(col).strip() for col in performance_analysis.columns]
+            performance_analysis = performance_analysis.reset_index()
             
-            # Rename columns for clarity
-            bottleneck_summary = bottleneck_summary.rename(columns={
-                'average_delay_mean': 'Avg Delay (sec)',
-                'average_delay_max': 'Max Delay (sec)',
-                'average_traveltime_mean': 'Avg Travel Time (min)',
-                'average_traveltime_max': 'Max Travel Time (min)',
-                'average_speed_mean': 'Avg Speed (mph)',
-                'average_speed_min': 'Min Speed (mph)'
-            })
-            
-            # Sort by worst travel time
-            bottleneck_summary = bottleneck_summary.sort_values('Max Travel Time (min)', ascending=False)
-            
-            # Color code the worst performers
-            st.dataframe(
-                bottleneck_summary.head(10),
-                use_container_width=True
+            # Calculate performance scores (higher = worse)
+            performance_analysis['Delay_Score'] = (
+                performance_analysis['average_delay_mean'] * 0.4 +
+                performance_analysis['average_delay_max'] * 0.4 +
+                performance_analysis['average_delay_std'] * 0.2
             )
             
-            # DIRECTION COMPARISON
-            st.subheader("🔄 Northbound vs Southbound Performance")
+            performance_analysis['TravelTime_Score'] = (
+                performance_analysis['average_traveltime_mean'] * 0.4 +
+                performance_analysis['average_traveltime_max'] * 0.4 +
+                performance_analysis['average_traveltime_std'] * 0.2
+            )
             
-            direction_comparison = filtered_data.groupby('direction').agg({
-                'average_delay': 'mean',
-                'average_traveltime': 'mean',
-                'average_speed': 'mean'
+            performance_analysis['Speed_Score'] = (
+                (60 - performance_analysis['average_speed_mean']) * 0.5 +  # Lower speed = higher score
+                (60 - performance_analysis['average_speed_min']) * 0.3 +
+                performance_analysis['average_speed_std'] * 0.2
+            )
+            
+            # Combined bottleneck score
+            performance_analysis['Bottleneck_Score'] = (
+                performance_analysis['Delay_Score'] * 0.35 +
+                performance_analysis['TravelTime_Score'] * 0.4 +
+                performance_analysis['Speed_Score'] * 0.25
+            ).round(1)
+            
+            # Create final display table
+            display_cols = ['segment_name', 'direction', 'Bottleneck_Score',
+                           'average_delay_mean', 'average_delay_max',
+                           'average_traveltime_mean', 'average_traveltime_max',
+                           'average_speed_mean', 'average_speed_min']
+            
+            final_performance = performance_analysis[display_cols].rename(columns={
+                'average_delay_mean': 'Avg Delay (sec)',
+                'average_delay_max': 'Peak Delay (sec)',
+                'average_traveltime_mean': 'Avg Travel Time (min)',
+                'average_traveltime_max': 'Peak Travel Time (min)',
+                'average_speed_mean': 'Avg Speed (mph)',
+                'average_speed_min': 'Slowest Speed (mph)'
+            })
+            
+            # Sort by bottleneck score (worst first)
+            final_performance = final_performance.sort_values('Bottleneck_Score', ascending=False)
+            
+            st.dataframe(
+                final_performance.head(10),
+                use_container_width=True,
+                column_config={
+                    "Bottleneck_Score": st.column_config.NumberColumn(
+                        "🚨 Bottleneck Score",
+                        help="Higher score = worse performance (weighted combination of delay, travel time, speed)",
+                        format="%.1f"
+                    )
+                }
+            )
+            
+            # PEAK HOUR ANALYSIS
+            if granularity == "Hourly":
+                st.subheader("⏰ Peak Hour Performance Patterns")
+                
+                # Add hour column for analysis
+                filtered_data['hour'] = filtered_data['local_datetime'].dt.hour
+                
+                hourly_performance = filtered_data.groupby('hour').agg({
+                    'average_delay': 'mean',
+                    'average_traveltime': 'mean',
+                    'average_speed': 'mean'
+                }).round(2)
+                
+                # Find worst performing hours
+                worst_delay_hour = hourly_performance['average_delay'].idxmax()
+                worst_travel_hour = hourly_performance['average_traveltime'].idxmax()
+                worst_speed_hour = hourly_performance['average_speed'].idxmin()
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Worst Delay Hour", f"{worst_delay_hour}:00",
+                             delta=f"{hourly_performance.loc[worst_delay_hour, 'average_delay']:.1f}s avg")
+                with col2:
+                    st.metric("Worst Travel Time Hour", f"{worst_travel_hour}:00",
+                             delta=f"{hourly_performance.loc[worst_travel_hour, 'average_traveltime']:.1f}m avg")
+                with col3:
+                    st.metric("Worst Speed Hour", f"{worst_speed_hour}:00",
+                             delta=f"{hourly_performance.loc[worst_speed_hour, 'average_speed']:.1f} mph avg")
+            
+            # DIRECTIONAL COMPARISON WITH ADVANCED METRICS
+            st.subheader("🔄 Advanced Directional Performance Comparison")
+            
+            direction_analysis = filtered_data.groupby('direction').agg({
+                'average_delay': ['mean', 'std', 'max'],
+                'average_traveltime': ['mean', 'std', 'max'],
+                'average_speed': ['mean', 'std', 'min']
             }).round(2)
             
+            direction_analysis.columns = ['_'.join(col) for col in direction_analysis.columns]
+            
             col1, col2 = st.columns(2)
-            with col1:
-                st.write("**Northbound (NB)**")
-                if 'NB' in direction_comparison.index:
-                    nb_data = direction_comparison.loc['NB']
-                    st.metric("NB Avg Delay", f"{nb_data['average_delay']:.1f} sec")
-                    st.metric("NB Avg Travel Time", f"{nb_data['average_traveltime']:.1f} min")
-                    st.metric("NB Avg Speed", f"{nb_data['average_speed']:.1f} mph")
+            directions = direction_analysis.index.tolist()
             
-            with col2:
-                st.write("**Southbound (SB)**")
-                if 'SB' in direction_comparison.index:
-                    sb_data = direction_comparison.loc['SB']
-                    st.metric("SB Avg Delay", f"{sb_data['average_delay']:.1f} sec")
-                    st.metric("SB Avg Travel Time", f"{sb_data['average_traveltime']:.1f} min")
-                    st.metric("SB Avg Speed", f"{sb_data['average_speed']:.1f} mph")
-            
-            # Data preview
-            with st.expander("📊 Raw Performance Data"):
-                st.dataframe(filtered_data.head(100))
+            for idx, direction in enumerate(directions):
+                with col1 if idx == 0 else col2:
+                    st.write(f"**{direction} Direction Performance**")
+                    
+                    if direction in direction_analysis.index:
+                        dir_data = direction_analysis.loc[direction]
+                        
+                        # Create reliability score
+                        reliability = 100 - (dir_data['average_traveltime_std'] / dir_data['average_traveltime_mean'] * 100)
+                        
+                        st.metric(f"{direction} Avg Delay", f"{dir_data['average_delay_mean']:.1f} sec",
+                                 delta=f"±{dir_data['average_delay_std']:.1f}s")
+                        st.metric(f"{direction} Avg Travel Time", f"{dir_data['average_traveltime_mean']:.1f} min",
+                                 delta=f"±{dir_data['average_traveltime_std']:.1f}m")
+                        st.metric(f"{direction} Reliability Score", f"{reliability:.1f}%",
+                                 help="Higher % = more consistent travel times")
         else:
             st.warning("Please select both start and end dates")
 
 with tab2:
-    st.header("Washington Street Intersection Volume Impact Analysis")
+    st.header("📊 Traffic Demand & Capacity Impact Analysis")
+    st.subheader("*Analyzing volume patterns and intersection capacity utilization*")
     
     # Load volume data
-    with st.spinner('Loading intersection volume data...'):
+    with st.spinner('Loading traffic demand data...'):
         volume_df = load_volume_data()
 
     if volume_df.empty:
         st.error("Failed to load volume data.")
     else:
-        # Get available intersections
+        # Get available intersections (maintain order)
         intersection_options = ["All Intersections"] + volume_df['intersection_name'].drop_duplicates().tolist()
 
         # Sidebar for volume analysis
         with st.sidebar:
-            st.title("🚦 Volume Analysis Controls")
+            st.title("📊 Demand Analysis Controls")
             
             with st.expander("📊 Volume Filters", expanded=True):
                 intersection = st.selectbox("Intersection", intersection_options)
@@ -252,74 +335,126 @@ with tab2:
                 display_df, date_range_vol, granularity_vol
             )
             
-            # VOLUME-FOCUSED METRICS FOR BOTTLENECK ANALYSIS
-            col1, col2, col3, col4 = st.columns(4)
+            # ADVANCED VOLUME METRICS
+            col1, col2, col3, col4, col5 = st.columns(5)
             with col1:
-                max_volume = filtered_volume_data['total_volume'].max()
-                st.metric("Peak Volume", f"{max_volume:,.0f} vehicles",
-                         help="Highest hourly volume recorded (potential bottleneck indicator)")
+                peak_volume = filtered_volume_data['total_volume'].max()
+                p95_volume = filtered_volume_data['total_volume'].quantile(0.95)
+                st.metric("Peak Demand", f"{peak_volume:,.0f} vph",
+                         delta=f"95th: {p95_volume:,.0f}",
+                         help="Peak vs 95th percentile volume")
             with col2:
                 avg_volume = filtered_volume_data['total_volume'].mean()
-                st.metric("Average Volume", f"{avg_volume:,.0f} vehicles",
-                         help="Average hourly volume across timeframe")
+                median_volume = filtered_volume_data['total_volume'].median()
+                st.metric("Average Demand", f"{avg_volume:,.0f} vph",
+                         delta=f"Median: {median_volume:,.0f}",
+                         help="Mean vs median hourly volume")
             with col3:
-                volume_std = filtered_volume_data['total_volume'].std()
-                st.metric("Volume Variability", f"{volume_std:,.0f}",
-                         help="Standard deviation - higher values indicate more congestion peaks")
+                # Peak-to-average ratio
+                peak_avg_ratio = peak_volume / avg_volume if avg_volume > 0 else 0
+                st.metric("Peak/Avg Ratio", f"{peak_avg_ratio:.1f}x",
+                         help="Higher ratio = more peaked demand")
             with col4:
-                total_intersections = filtered_volume_data['intersection_name'].nunique() if 'intersection_name' in filtered_volume_data.columns else 0
-                st.metric("Intersections Analyzed", f"{total_intersections}")
+                # Volume consistency (coefficient of variation)
+                cv_volume = (filtered_volume_data['total_volume'].std() / 
+                           filtered_volume_data['total_volume'].mean()) * 100 if avg_volume > 0 else 0
+                st.metric("Demand Variability", f"{cv_volume:.1f}%",
+                         help="Lower % = more consistent demand")
+            with col5:
+                # Estimate capacity utilization (assuming 1800 vph per lane capacity)
+                estimated_capacity = 1800  # vehicles per hour per lane (typical)
+                utilization = (peak_volume / estimated_capacity) * 100
+                st.metric("Est. Capacity Use", f"{utilization:.0f}%",
+                         help="Based on 1800 vph/lane capacity")
             
-            # HIGHEST VOLUME INTERSECTIONS (BOTTLENECK CANDIDATES)
-            st.subheader("🚨 Highest Volume Intersections (Potential Bottlenecks)")
+            # ADVANCED INTERSECTION RANKING
+            st.subheader("🚨 High-Demand Intersection Analysis")
             
-            # Create volume ranking by intersection
-            volume_summary = filtered_volume_data.groupby(['intersection_name', 'direction']).agg({
-                'total_volume': ['mean', 'max', 'std']
+            # Create comprehensive volume analysis
+            volume_analysis = filtered_volume_data.groupby(['intersection_name', 'direction']).agg({
+                'total_volume': ['mean', 'max', 'std', lambda x: x.quantile(0.95), 'count']
             }).round(0)
             
             # Flatten column names
-            volume_summary.columns = ['_'.join(col).strip() for col in volume_summary.columns]
-            volume_summary = volume_summary.reset_index()
+            volume_analysis.columns = ['_'.join(col).strip() for col in volume_analysis.columns]
+            volume_analysis = volume_analysis.reset_index()
             
-            # Rename columns
-            volume_summary = volume_summary.rename(columns={
-                'total_volume_mean': 'Avg Volume/Hour',
-                'total_volume_max': 'Peak Volume/Hour',
-                'total_volume_std': 'Volume Variability'
-            })
+            # Calculate demand pressure scores
+            volume_analysis['Peak_Pressure'] = volume_analysis['total_volume_max']
+            volume_analysis['Avg_Pressure'] = volume_analysis['total_volume_mean']
+            volume_analysis['Variability_Score'] = volume_analysis['total_volume_std']
             
-            # Sort by peak volume (highest congestion potential)
-            volume_summary = volume_summary.sort_values('Peak Volume/Hour', ascending=False)
+            # Combined demand score (higher = more problematic)
+            volume_analysis['Demand_Score'] = (
+                (volume_analysis['Peak_Pressure'] / 1800 * 100) * 0.4 +  # Peak capacity utilization
+                (volume_analysis['Avg_Pressure'] / 1000 * 100) * 0.3 +   # Average pressure
+                (volume_analysis['Variability_Score'] / 100) * 0.3       # Variability factor
+            ).round(1)
             
-            st.dataframe(
-                volume_summary.head(10),
-                use_container_width=True
+            # Estimated congestion risk
+            volume_analysis['Congestion_Risk'] = np.where(
+                volume_analysis['total_volume_max'] > 1500, 'HIGH',
+                np.where(volume_analysis['total_volume_max'] > 1200, 'MEDIUM', 'LOW')
             )
             
-            # DIRECTION COMPARISON FOR VOLUMES
-            st.subheader("🔄 Volume by Direction (Bottleneck Patterns)")
+            # Create final display
+            display_cols = ['intersection_name', 'direction', 'Demand_Score', 'Congestion_Risk',
+                           'total_volume_mean', 'total_volume_max', 'total_volume_std',
+                           'total_volume_<lambda>']
             
-            volume_direction = filtered_volume_data.groupby('direction').agg({
-                'total_volume': ['mean', 'max']
-            }).round(0)
+            final_volume = volume_analysis[display_cols].rename(columns={
+                'total_volume_mean': 'Avg Volume (vph)',
+                'total_volume_max': 'Peak Volume (vph)',
+                'total_volume_std': 'Volume StdDev',
+                'total_volume_<lambda>': '95th Percentile'
+            })
             
-            volume_direction.columns = ['Average Volume', 'Peak Volume']
-            volume_direction = volume_direction.reset_index()
+            # Sort by demand score
+            final_volume = final_volume.sort_values('Demand_Score', ascending=False)
             
-            col1, col2 = st.columns(2)
-            for idx, row in volume_direction.iterrows():
-                direction = row['direction']
-                avg_vol = row['Average Volume']
-                peak_vol = row['Peak Volume']
+            st.dataframe(
+                final_volume.head(10),
+                use_container_width=True,
+                column_config={
+                    "Demand_Score": st.column_config.NumberColumn(
+                        "📊 Demand Score",
+                        help="Higher score = higher demand pressure",
+                        format="%.1f"
+                    ),
+                    "Congestion_Risk": st.column_config.TextColumn(
+                        "⚠️ Risk Level",
+                        help="Based on peak volume thresholds"
+                    )
+                }
+            )
+            
+            # VOLUME-TO-PERFORMANCE CORRELATION INSIGHTS
+            if not corridor_df.empty:
+                st.subheader("🔗 Volume-Performance Relationship Analysis")
+                st.info("💡 **Insight**: Intersections with high volume variability often correlate with travel time inconsistency in adjacent corridor segments.")
                 
-                with col1 if idx == 0 else col2:
-                    st.write(f"**{direction} Direction**")
-                    st.metric(f"{direction} Avg Volume", f"{avg_vol:,.0f} veh/hr")
-                    st.metric(f"{direction} Peak Volume", f"{peak_vol:,.0f} veh/hr")
+                # Calculate correlation metrics
+                high_volume_intersections = final_volume.head(3)['intersection_name'].tolist()
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write("**Highest Demand Intersections:**")
+                    for i, intersection in enumerate(high_volume_intersections, 1):
+                        risk = final_volume[final_volume['intersection_name'] == intersection]['Congestion_Risk'].iloc[0]
+                        score = final_volume[final_volume['intersection_name'] == intersection]['Demand_Score'].iloc[0]
+                        st.write(f"{i}. {intersection} (Score: {score}, Risk: {risk})")
+                
+                with col2:
+                    st.write("**Capacity Management Recommendations:**")
+                    if utilization > 80:
+                        st.warning("🚨 Critical: Peak utilization >80% - Consider signal optimization")
+                    elif utilization > 60:
+                        st.warning("⚠️ Monitor: Peak utilization >60% - Plan improvements")
+                    else:
+                        st.success("✅ Acceptable: Current capacity appears adequate")
             
             # Data preview
-            with st.expander("📊 Raw Volume Data"):
+            with st.expander("📊 Raw Volume Data Sample"):
                 st.dataframe(filtered_volume_data.head(100))
         else:
             st.warning("Please select both start and end dates")
