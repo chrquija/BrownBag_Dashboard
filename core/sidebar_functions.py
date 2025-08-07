@@ -45,6 +45,33 @@ def load_traffic_data():
     else:
         return pd.DataFrame()
 
+@st.cache_data
+def load_volume_data():
+    """
+    Load consolidated volume data for all Washington Street intersections
+    """
+    volume_url = "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/VOLUME/KMOB_LONG/LONG_MASTER_Avenue52_to_Avenue47_1hr_NS_VOLUME_OctoberTOJune.csv"
+    
+    try:
+        volume_df = pd.read_csv(volume_url)
+        
+        # Convert datetime
+        volume_df['local_datetime'] = pd.to_datetime(volume_df['local_datetime'])
+        
+        # Sort by datetime
+        volume_df = volume_df.sort_values('local_datetime').reset_index(drop=True)
+        
+        # Create readable intersection names from intersection_id
+        volume_df['intersection_name'] = volume_df['intersection_id'].str.replace('_', ' & ').str.replace('St', 'St')
+        
+        st.sidebar.success(f"✅ Volume data loaded: {len(volume_df):,} records from {volume_df['intersection_id'].nunique()} intersections")
+        
+        return volume_df
+        
+    except Exception as e:
+        st.error(f"Error loading volume data: {e}")
+        return pd.DataFrame()
+
 #FUNCTIONS FOR DATE RANGE FUNCTIONALITY
 def process_traffic_data(df, date_range, granularity, time_filter=None, start_hour=None, end_hour=None):
     """
@@ -80,35 +107,65 @@ def process_traffic_data(df, date_range, granularity, time_filter=None, start_ho
         elif time_filter == "Custom Range" and start_hour is not None and end_hour is not None:
             df = df[df['local_datetime'].dt.hour.between(start_hour, end_hour - 1)]
 
-    # Aggregate based on granularity
-    if granularity == "Daily":
-        df['date_group'] = df['local_datetime'].dt.date
-        grouped = df.groupby(['date_group', 'corridor_id', 'direction', 'segment_name']).agg({
-            'average_delay': 'mean',
-            'average_traveltime': 'mean',
-            'average_speed': 'mean'
-        }).reset_index()
-        grouped['local_datetime'] = pd.to_datetime(grouped['date_group'])
+    # Determine data type and aggregate accordingly
+    if 'segment_name' in df.columns:  # Corridor data (delay/speed/travel time)
+        if granularity == "Daily":
+            df['date_group'] = df['local_datetime'].dt.date
+            grouped = df.groupby(['date_group', 'corridor_id', 'direction', 'segment_name']).agg({
+                'average_delay': 'mean',
+                'average_traveltime': 'mean',
+                'average_speed': 'mean'
+            }).reset_index()
+            grouped['local_datetime'] = pd.to_datetime(grouped['date_group'])
 
-    elif granularity == "Weekly":
-        df['week_group'] = df['local_datetime'].dt.to_period('W').dt.start_time
-        grouped = df.groupby(['week_group', 'corridor_id', 'direction', 'segment_name']).agg({
-            'average_delay': 'mean',
-            'average_traveltime': 'mean',
-            'average_speed': 'mean'
-        }).reset_index()
-        grouped['local_datetime'] = grouped['week_group']
+        elif granularity == "Weekly":
+            df['week_group'] = df['local_datetime'].dt.to_period('W').dt.start_time
+            grouped = df.groupby(['week_group', 'corridor_id', 'direction', 'segment_name']).agg({
+                'average_delay': 'mean',
+                'average_traveltime': 'mean',
+                'average_speed': 'mean'
+            }).reset_index()
+            grouped['local_datetime'] = grouped['week_group']
 
-    elif granularity == "Monthly":
-        df['month_group'] = df['local_datetime'].dt.to_period('M').dt.start_time
-        grouped = df.groupby(['month_group', 'corridor_id', 'direction', 'segment_name']).agg({
-            'average_delay': 'mean',
-            'average_traveltime': 'mean',
-            'average_speed': 'mean'
-        }).reset_index()
-        grouped['local_datetime'] = grouped['month_group']
+        elif granularity == "Monthly":
+            df['month_group'] = df['local_datetime'].dt.to_period('M').dt.start_time
+            grouped = df.groupby(['month_group', 'corridor_id', 'direction', 'segment_name']).agg({
+                'average_delay': 'mean',
+                'average_traveltime': 'mean',
+                'average_speed': 'mean'
+            }).reset_index()
+            grouped['local_datetime'] = grouped['month_group']
 
-    else:  # Hourly - no aggregation needed
+        else:  # Hourly - no aggregation needed
+            grouped = df
+            
+    elif 'intersection_id' in df.columns:  # Volume data
+        if granularity == "Daily":
+            df['date_group'] = df['local_datetime'].dt.date
+            grouped = df.groupby(['date_group', 'intersection_id', 'direction', 'intersection_name']).agg({
+                'total_volume': 'sum'
+            }).reset_index()
+            grouped['local_datetime'] = pd.to_datetime(grouped['date_group'])
+
+        elif granularity == "Weekly":
+            df['week_group'] = df['local_datetime'].dt.to_period('W').dt.start_time
+            grouped = df.groupby(['week_group', 'intersection_id', 'direction', 'intersection_name']).agg({
+                'total_volume': 'sum'
+            }).reset_index()
+            grouped['local_datetime'] = grouped['week_group']
+
+        elif granularity == "Monthly":
+            df['month_group'] = df['local_datetime'].dt.to_period('M').dt.start_time
+            grouped = df.groupby(['month_group', 'intersection_id', 'direction', 'intersection_name']).agg({
+                'total_volume': 'sum'
+            }).reset_index()
+            grouped['local_datetime'] = grouped['month_group']
+
+        else:  # Hourly - no aggregation needed
+            grouped = df
+    
+    else:
+        # Fallback - just return filtered data
         grouped = df
 
     return grouped
