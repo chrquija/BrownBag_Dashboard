@@ -206,7 +206,7 @@ with tab2:
         st.error("Failed to load volume data.")
     else:
         # Get available intersections
-        intersection_options = ["All Intersections"] + sorted(volume_df['intersection_name'].unique().tolist())
+        intersection_options = ["All Intersections"] + volume_df['intersection_name'].drop_duplicates().tolist()
 
         # Sidebar for volume analysis
         with st.sidebar:

@@ -62,13 +62,34 @@ def load_volume_data():
         volume_df = volume_df.sort_values('local_datetime').reset_index(drop=True)
         
         # Create proper intersection names from intersection_id
-        # Replace underscores with spaces first, then fix the formatting
         volume_df['intersection_name'] = (
             volume_df['intersection_id']
             .str.replace('_', ' ')  # Replace underscores with spaces
             .str.replace('Washington St and ', 'Washington St & ')  # Fix the main intersection format
             .str.replace(' and ', ' & ')  # Replace any remaining 'and' with '&'
         )
+        
+        # Create a sorting order for intersections (from south to north along Washington St)
+        intersection_order = {
+            'Washington St & Avenue52': 1,
+            'Washington St & Calle Tampico': 2, 
+            'Washington St & Village Shop Ctr': 3,
+            'Washington St & Avenue50': 4,
+            'Washington St & Sagebrush Ave': 5,
+            'Washington St & Eisenhower': 6,
+            'Washington St & Ave48': 7,
+            'Washington St & Ave47': 8
+        }
+        
+        # Add sorting column
+        volume_df['sort_order'] = volume_df['intersection_name'].map(intersection_order)
+        
+        # Sort by the order (fill NaN with high number to put unknowns at end)
+        volume_df['sort_order'] = volume_df['sort_order'].fillna(999)
+        volume_df = volume_df.sort_values('sort_order')
+        
+        # Drop the sorting column
+        volume_df = volume_df.drop('sort_order', axis=1)
         
         return volume_df
         
