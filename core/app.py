@@ -29,7 +29,7 @@ CRITICAL_DELAY_SEC = 120
 HIGH_DELAY_SEC = 60
 
 # =========================
-# CSS (kept your aesthetic, trimmed a bit)
+# CSS
 # =========================
 st.markdown("""
 <style>
@@ -78,7 +78,6 @@ st.markdown("""
     .volume-metric { background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(41, 128, 185, 0.1));
         border: 1px solid rgba(52, 152, 219, 0.3); border-radius: 12px; padding: 1rem; margin: 0.5rem 0; }
 
-    /* Reduce plotly modebar contrast */
     .modebar { filter: saturate(0.85) opacity(0.9); }
 </style>
 """, unsafe_allow_html=True)
@@ -134,7 +133,6 @@ def get_corridor_df() -> pd.DataFrame:
     if df is None or len(df) == 0:
         return pd.DataFrame()
     df = _safe_to_datetime(df.copy(), "local_datetime")
-    # Basic column sanity
     needed = {"segment_name", "average_delay", "average_traveltime", "average_speed", "direction"}
     missing = needed - set(df.columns)
     if missing:
@@ -221,7 +219,6 @@ def volume_charts(data: pd.DataFrame):
 
     dd["hour"] = dd["local_datetime"].dt.hour
     hourly_avg = dd.groupby(["hour", "intersection_name"], as_index=False)["total_volume"].mean()
-    # Pivot with clean column names
     hourly_pivot = hourly_avg.pivot(index="intersection_name", columns="hour", values="total_volume").sort_index()
 
     fig2.add_trace(
@@ -255,18 +252,24 @@ def volume_charts(data: pd.DataFrame):
     return fig1, fig2, fig3
 
 def date_range_preset_controls(min_date: datetime.date, max_date: datetime.date, key_prefix: str):
-    """Presets that don't clobber user custom ranges and persist in session_state."""
+    """
+    Presets that default to Last 30 Days on first load, persist in session_state,
+    and won't clobber custom picks.
+    """
     k_range = f"{key_prefix}_range"
+
+    # Default to LAST 30 DAYS (bounded by min_date)
     if k_range not in st.session_state:
-        st.session_state[k_range] = (min_date, max_date)
+        default_start = max(min_date, max_date - timedelta(days=30))
+        st.session_state[k_range] = (default_start, max_date)
 
     c1, c2, c3 = st.columns(3)
     with c1:
         if st.button("📅 Last 7 Days", key=f"{key_prefix}_7d"):
-            st.session_state[k_range] = (max_date - timedelta(days=7), max_date)
+            st.session_state[k_range] = (max(min_date, max_date - timedelta(days=7)), max_date)
     with c2:
         if st.button("📅 Last 30 Days", key=f"{key_prefix}_30d"):
-            st.session_state[k_range] = (max_date - timedelta(days=30), max_date)
+            st.session_state[k_range] = (max(min_date, max_date - timedelta(days=30)), max_date)
     with c3:
         if st.button("📅 Full Range", key=f"{key_prefix}_full"):
             st.session_state[k_range] = (min_date, max_date)
@@ -278,7 +281,6 @@ def date_range_preset_controls(min_date: datetime.date, max_date: datetime.date,
         max_value=max_date,
         key=f"{key_prefix}_custom"
     )
-    # Keep session_state aligned if user changes the picker
     if custom != st.session_state[k_range]:
         st.session_state[k_range] = custom
 
@@ -311,47 +313,45 @@ with tab1:
         progress_bar.empty()
         status_text.empty()
 
+        # ---- Sidebar controls wrapped in an expander ----
         with st.sidebar:
-            st.markdown("### 🚧 Performance Analysis Controls")
+            with st.expander("🚧 Performance Analysis Controls", expanded=False):
+                seg_options = ["All Segments"] + sorted(corridor_df["segment_name"].dropna().unique().tolist())
+                corridor = st.selectbox("🛣️ Select Corridor Segment", seg_options,
+                                        help="Choose a specific segment or analyze all segments")
 
-            seg_options = ["All Segments"] + sorted(corridor_df["segment_name"].dropna().unique().tolist())
-            corridor = st.selectbox("🛣️ Select Corridor Segment", seg_options,
-                                    help="Choose a specific segment or analyze all segments")
+                min_date = corridor_df["local_datetime"].dt.date.min()
+                max_date = corridor_df["local_datetime"].dt.date.max()
 
-            min_date = corridor_df["local_datetime"].dt.date.min()
-            max_date = corridor_df["local_datetime"].dt.date.max()
-            st.markdown("#### 📅 Analysis Period")
-            date_range = date_range_preset_controls(min_date, max_date, key_prefix="perf")
+                st.markdown("#### 📅 Analysis Period")
+                date_range = date_range_preset_controls(min_date, max_date, key_prefix="perf")
 
-            st.markdown("#### ⏰ Analysis Settings")
-            granularity = st.selectbox("Data Aggregation", ["Hourly", "Daily", "Weekly", "Monthly"],
-                                       index=0, help="Higher aggregation smooths trends but may hide peaks")
+                st.markdown("#### ⏰ Analysis Settings")
+                granularity = st.selectbox("Data Aggregation", ["Hourly", "Daily", "Weekly", "Monthly"],
+                                           index=0, help="Higher aggregation smooths trends but may hide peaks")
 
-            time_filter, start_hour, end_hour = None, None, None
-            if granularity == "Hourly":
-                time_filter = st.selectbox(
-                    "Time Period Focus",
-                    ["All Hours", "Peak Hours (7–9 AM, 4–6 PM)", "AM Peak (7–9 AM)", "PM Peak (4–6 PM)", "Off-Peak", "Custom Range"]
-                )
-                if time_filter == "Custom Range":
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        start_hour = st.number_input("Start Hour (0–23)", 0, 23, 7, step=1)
-                    with c2:
-                        end_hour = st.number_input("End Hour (1–24)", 1, 24, 18, step=1)
+                time_filter, start_hour, end_hour = None, None, None
+                if granularity == "Hourly":
+                    time_filter = st.selectbox(
+                        "Time Period Focus",
+                        ["All Hours", "Peak Hours (7–9 AM, 4–6 PM)", "AM Peak (7–9 AM)", "PM Peak (4–6 PM)", "Off-Peak", "Custom Range"]
+                    )
+                    if time_filter == "Custom Range":
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            start_hour = st.number_input("Start Hour (0–23)", 0, 23, 7, step=1)
+                        with c2:
+                            end_hour = st.number_input("End Hour (1–24)", 1, 24, 18, step=1)
 
         if len(date_range) == 2:
             try:
-                # Segment filter
                 base_df = corridor_df.copy()
                 if corridor != "All Segments":
                     base_df = base_df[base_df["segment_name"] == corridor]
 
-                # Guard for empty after filter
                 if base_df.empty:
                     st.warning("⚠️ No data for the selected segment.")
                 else:
-                    # Processed (aggregated) data
                     filtered_data = process_traffic_data(
                         base_df,
                         date_range,
@@ -363,7 +363,6 @@ with tab1:
                     if filtered_data.empty:
                         st.warning("⚠️ No data available for the selected filters.")
                     else:
-                        # Context header
                         total_records = len(filtered_data)
                         data_span = (date_range[1] - date_range[0]).days + 1
                         time_context = f" • {time_filter}" if (granularity == "Hourly" and time_filter) else ""
@@ -377,18 +376,15 @@ with tab1:
                         </div>
                         """, unsafe_allow_html=True)
 
-                        # Raw window for KPIs (hourly base)
                         raw_data = base_df[
                             (base_df["local_datetime"].dt.date >= date_range[0]) &
                             (base_df["local_datetime"].dt.date <= date_range[1])
                         ].copy()
 
-                        # KPI block
                         st.subheader("🎯 Key Performance Indicators")
                         if raw_data.empty:
                             st.info("No raw hourly data in this window.")
                         else:
-                            # Clean NaNs
                             for col in ["average_delay", "average_traveltime", "average_speed"]:
                                 if col in raw_data:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
@@ -435,7 +431,6 @@ with tab1:
                                 st.metric("⚠️ Congestion Frequency", f"{high_delay_pct:.1f}%", delta=f"{hours} hours")
                                 st.markdown(f'<span class="performance-badge {badge}">{freq_rating}</span>', unsafe_allow_html=True)
 
-                        # Charts
                         if len(filtered_data) > 1:
                             st.subheader("📈 Performance Trends")
                             v1, v2 = st.columns(2)
@@ -446,7 +441,6 @@ with tab1:
                                 tc = performance_chart(filtered_data, "travel")
                                 if tc: st.plotly_chart(tc, use_container_width=True)
 
-                        # Insights
                         if not raw_data.empty:
                             worst_delay = float(np.nanmax(raw_data["average_delay"])) if raw_data["average_delay"].notna().any() else 0.0
                             avg_tt = float(np.nanmean(raw_data["average_traveltime"])) if raw_data["average_traveltime"].notna().any() else 0.0
@@ -468,7 +462,6 @@ with tab1:
                             </div>
                             """, unsafe_allow_html=True)
 
-                        # Bottleneck table
                         st.subheader("🚨 Comprehensive Bottleneck Analysis")
                         if not raw_data.empty:
                             try:
@@ -482,7 +475,6 @@ with tab1:
                                     n=("average_delay", "count"),
                                 ).reset_index()
 
-                                # Robust scoring (normalize to avoid one metric dominating)
                                 def _norm(s):
                                     s = s.astype(float)
                                     mn, mx = np.nanmin(s), np.nanmax(s)
@@ -528,7 +520,6 @@ with tab1:
                                     }
                                 )
 
-                                # Downloads
                                 st.download_button(
                                     "⬇️ Download Bottleneck Table (CSV)",
                                     data=final.to_csv(index=False).encode("utf-8"),
@@ -569,21 +560,23 @@ with tab2:
         status_text.text("✅ Volume data loaded successfully!")
         time.sleep(0.5); progress_bar.empty(); status_text.empty()
 
+        # ---- Sidebar controls wrapped in an expander ----
         with st.sidebar:
-            st.markdown("### 📊 Volume Analysis Controls")
-            intersections = ["All Intersections"] + sorted(volume_df["intersection_name"].dropna().unique().tolist())
-            intersection = st.selectbox("🚦 Select Intersection", intersections)
+            with st.expander("📊 Volume Analysis Controls", expanded=False):
+                intersections = ["All Intersections"] + sorted(volume_df["intersection_name"].dropna().unique().tolist())
+                intersection = st.selectbox("🚦 Select Intersection", intersections)
 
-            min_date = volume_df["local_datetime"].dt.date.min()
-            max_date = volume_df["local_datetime"].dt.date.max()
-            st.markdown("#### 📅 Analysis Period")
-            date_range_vol = date_range_preset_controls(min_date, max_date, key_prefix="vol")
+                min_date = volume_df["local_datetime"].dt.date.min()
+                max_date = volume_df["local_datetime"].dt.date.max()
 
-            st.markdown("#### ⏰ Analysis Settings")
-            granularity_vol = st.selectbox("Data Aggregation", ["Hourly", "Daily", "Weekly", "Monthly"], index=0)
+                st.markdown("#### 📅 Analysis Period")
+                date_range_vol = date_range_preset_controls(min_date, max_date, key_prefix="vol")
 
-            direction_options = ["All Directions"] + sorted(volume_df["direction"].dropna().unique().tolist())
-            direction_filter = st.selectbox("🔄 Direction Filter", direction_options)
+                st.markdown("#### ⏰ Analysis Settings")
+                granularity_vol = st.selectbox("Data Aggregation", ["Hourly", "Daily", "Weekly", "Monthly"], index=0)
+
+                direction_options = ["All Directions"] + sorted(volume_df["direction"].dropna().unique().tolist())
+                direction_filter = st.selectbox("🔄 Direction Filter", direction_options)
 
         if len(date_range_vol) == 2:
             try:
@@ -611,7 +604,6 @@ with tab2:
                         </div>
                         """, unsafe_allow_html=True)
 
-                        # Raw hourly for KPI
                         raw = base_df[
                             (base_df["local_datetime"].dt.date >= date_range_vol[0]) &
                             (base_df["local_datetime"].dt.date <= date_range_vol[1])
@@ -669,10 +661,8 @@ with tab2:
                                 level = "Very High" if risk_pct > 25 else ("High" if risk_pct > 15 else ("Moderate" if risk_pct > 5 else "Low"))
                                 st.markdown(f'<span class="performance-badge {badge}">{level} Risk</span>', unsafe_allow_html=True)
 
-                        # Charts
                         st.subheader("📈 Volume Analysis Visualizations")
                         if len(filtered_volume_data) > 1:
-                            c1, c2 = None, None
                             chart1, chart2, chart3 = volume_charts(filtered_volume_data)
                             if chart1: st.plotly_chart(chart1, use_container_width=True)
                             colA, colB = st.columns(2)
@@ -681,7 +671,6 @@ with tab2:
                             with colB:
                                 if chart2: st.plotly_chart(chart2, use_container_width=True)
 
-                        # Insights
                         if not raw.empty:
                             peak = float(np.nanmax(raw["total_volume"])) if raw["total_volume"].notna().any() else 0
                             avg = float(np.nanmean(raw["total_volume"])) if raw["total_volume"].notna().any() else 0
@@ -707,7 +696,6 @@ with tab2:
                             </div>
                             """, unsafe_allow_html=True)
 
-                        # Ranking
                         st.subheader("🚨 Intersection Volume & Capacity Risk Analysis")
                         try:
                             g = raw.groupby(["intersection_name", "direction"]).agg(
@@ -782,7 +770,6 @@ with tab2:
                                 Avg=("total_volume", "mean"), Peak=("total_volume", "max")
                             ).reset_index().sort_values("Peak", ascending=False)
                             st.dataframe(simple, use_container_width=True)
-
             except Exception as e:
                 st.error(f"❌ Error processing volume data: {e}")
                 st.info("Please check your data sources and try again.")
@@ -798,6 +785,6 @@ st.markdown("""
     border-radius: 15px; margin-top: 1rem; border: 1px solid rgba(79,172,254,0.2);">
     <h4 style="color:#2980b9; margin-bottom: 0.5rem;">🛣️ Active Transportation & Operations Management Dashboard</h4>
     <p style="opacity:0.8; margin:0;">Powered by Advanced Machine Learning • Real-time Traffic Intelligence • Sustainable Transportation Solutions</p>
-    <p style="opacity:0.6; margin-top:0.25rem; font-size:0.9rem;">© 2025 ADVANTEC Platform - Optimizing Transportation Networks</p>
+    <p style="opacity:0.6; margin-top: 0.25rem; font-size: 0.9rem;">© 2025 ADVANTEC Platform - Optimizing Transportation Networks</p>
 </div>
 """, unsafe_allow_html=True)
