@@ -381,7 +381,6 @@ with tab1:
                             (base_df["local_datetime"].dt.date <= date_range[1])
                         ].copy()
 
-                        st.subheader("🎯 Key Performance Indicators")
                         if raw_data.empty:
                             st.info("No raw hourly data in this window.")
                         else:
