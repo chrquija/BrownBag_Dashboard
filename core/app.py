@@ -131,8 +131,9 @@ def get_performance_rating(score: float):
 # --- Corridor ordering helpers ---
 # Ordered cross-street spine from south -> north (customize as needed)
 CORRIDOR_ORDER_KEYS = [
-    "Ave 52", "Ave 50", "Ave 48", "Calle Tampico", "Fred Waring", "Fred Waring Dr",
-    "Miles Ave", "Point Happy", "Point Happy Simon", "Hwy 111", "Highway 111"
+    "Ave 52", "Ave 50", "Ave 48", "Calle Tampico",
+    "Fred Waring", "Fred Waring Dr", "Miles Ave",
+    "Point Happy", "Point Happy Simon", "Hwy 111", "Highway 111", "Ave 47"
 ]
 
 def _key_index(name: str) -> int:
@@ -386,7 +387,7 @@ with tab1:
                 seg_all = list(corridor_df["segment_name"].dropna().unique())
                 seg_ordered = order_segments_for_dropdown(seg_all)
                 seg_options = ["All Segments"] + seg_ordered
-                corridor = st.selectbox("🛣️ Segment", seg_options, help="South → North order")
+                corridor = st.selectbox("🛣️ Segment", seg_options, help="South → North order", key="perf_segment")
 
                 min_date = corridor_df["local_datetime"].dt.date.min()
                 max_date = corridor_df["local_datetime"].dt.date.max()
@@ -394,17 +395,18 @@ with tab1:
                 date_range = date_range_preset_controls(min_date, max_date, key_prefix="perf")
 
                 st.markdown("#### ⏰ Settings")
-                granularity = st.selectbox("Aggregation", ["Hourly", "Daily", "Weekly", "Monthly"], index=0)
+                granularity = st.selectbox("Aggregation", ["Hourly", "Daily", "Weekly", "Monthly"], index=0, key="perf_aggregation")
                 time_filter, start_hour, end_hour = None, None, None
                 if granularity == "Hourly":
                     time_filter = st.selectbox(
                         "Time Focus",
-                        ["All Hours", "Peak Hours (7–9 AM, 4–6 PM)", "AM Peak (7–9 AM)", "PM Peak (4–6 PM)", "Off-Peak", "Custom Range"]
+                        ["All Hours", "Peak Hours (7–9 AM, 4–6 PM)", "AM Peak (7–9 AM)", "PM Peak (4–6 PM)", "Off-Peak", "Custom Range"],
+                        key="perf_time_focus"
                     )
                     if time_filter == "Custom Range":
                         c1, c2 = st.columns(2)
-                        with c1: start_hour = st.number_input("Start Hour", 0, 23, 7)
-                        with c2: end_hour   = st.number_input("End Hour", 1, 24, 18)
+                        with c1: start_hour = st.number_input("Start Hour", 0, 23, 7, key="perf_start_hour")
+                        with c2: end_hour   = st.number_input("End Hour", 1, 24, 18, key="perf_end_hour")
 
         if len(date_range) == 2:
             try:
@@ -626,7 +628,7 @@ with tab2:
                 ints_all = list(volume_df["intersection_name"].dropna().unique())
                 ints_ordered = order_intersections_for_dropdown(ints_all)
                 intersection_options = ["All Intersections"] + ints_ordered
-                intersection = st.selectbox("🚦 Intersection", intersection_options, help="South → North order")
+                intersection = st.selectbox("🚦 Intersection", intersection_options, help="South → North order", key="vol_intersection")
 
                 min_date = volume_df["local_datetime"].dt.date.min()
                 max_date = volume_df["local_datetime"].dt.date.max()
@@ -634,9 +636,9 @@ with tab2:
                 date_range_vol = date_range_preset_controls(min_date, max_date, key_prefix="vol")
 
                 st.markdown("#### ⏰ Settings")
-                granularity_vol = st.selectbox("Aggregation", ["Hourly", "Daily", "Weekly", "Monthly"], index=0)
+                granularity_vol = st.selectbox("Aggregation", ["Hourly", "Daily", "Weekly", "Monthly"], index=0, key="vol_aggregation")
                 direction_options = ["All Directions"] + sorted(volume_df["direction"].dropna().unique().tolist())
-                direction_filter = st.selectbox("Direction", direction_options)
+                direction_filter = st.selectbox("Direction", direction_options, key="vol_direction")
 
         if len(date_range_vol) == 2:
             try:
