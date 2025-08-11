@@ -437,7 +437,7 @@ with tab1:
 
                         st.markdown(f"""
                         <div class="context-header">
-                            <h2>📊 Performance Dashboard: {corridor}</h2>
+                            <h2>📊 {corridor}</h2>
                             <p>📅 {date_range[0].strftime('%b %d, %Y')} to {date_range[1].strftime('%b %d, %Y')}
                             ({data_span} days) • {granularity} Aggregation{time_context}</p>
                             <p>📈 Analyzing {total_records:,} data points across the selected period</p>
