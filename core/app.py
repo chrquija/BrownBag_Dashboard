@@ -204,8 +204,12 @@ def performance_chart(data: pd.DataFrame, metric_type: str = "delay"):
     metric_type = metric_type.lower().strip()
     if metric_type == "delay":
         y_col, title, color = "average_delay", "Traffic Delay Analysis", "#e74c3c"
+        y_label = "Average Delay (seconds)"
+        dist_x_label = "Average Delay (seconds)"
     else:
         y_col, title, color = "average_traveltime", "Travel Time Analysis", "#3498db"
+        y_label = "Average Travel Time (minutes)"
+        dist_x_label = "Average Travel Time (minutes)"
 
     dd = data.dropna(subset=["local_datetime", y_col]).sort_values("local_datetime")
 
@@ -214,6 +218,8 @@ def performance_chart(data: pd.DataFrame, metric_type: str = "delay"):
         subplot_titles=("Time Series Analysis", "Distribution Analysis"),
         vertical_spacing=0.1
     )
+
+    # Time series plot
     fig.add_trace(
         go.Scatter(
             x=dd["local_datetime"], y=dd[y_col],
@@ -221,15 +227,31 @@ def performance_chart(data: pd.DataFrame, metric_type: str = "delay"):
             line=dict(color=color, width=2), marker=dict(size=4)
         ), row=1, col=1
     )
+
+    # Distribution histogram
     fig.add_trace(
-        go.Histogram(x=dd[y_col], nbinsx=30, name=f"{metric_type.title()} Distribution", marker_color=color,
-                     opacity=0.75),
+        go.Histogram(x=dd[y_col], nbinsx=30, name=f"{metric_type.title()} Distribution",
+                     marker_color=color, opacity=0.75),
         row=2, col=1
     )
-    fig.update_layout(height=600, title=title, showlegend=True, template="plotly_white",
-                      plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-    return fig
 
+    # Update layout with proper axis labels
+    fig.update_layout(
+        height=600,
+        title=title,
+        showlegend=True,
+        template="plotly_white",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)"
+    )
+
+    # Update x and y axis labels for both subplots
+    fig.update_xaxes(title_text="Date/Time", row=1, col=1)
+    fig.update_yaxes(title_text=y_label, row=1, col=1)
+    fig.update_xaxes(title_text=dist_x_label, row=2, col=1)
+    fig.update_yaxes(title_text="Frequency (Number of Hours)", row=2, col=1)
+
+    return fig
 
 def volume_charts(data: pd.DataFrame):
     if data.empty: return None, None, None
