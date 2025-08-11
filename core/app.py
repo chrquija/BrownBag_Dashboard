@@ -363,7 +363,7 @@ tab1, tab2 = st.tabs(["1️⃣ ITERIS CLEARGUIDE DATA", "2️⃣ KINETIC MOBILIT
 # -------------------------
 with tab1:
     st.header("🚧 Corridor Performance Analysis")
-    st.markdown("Speed, Delay, and Traveltime")
+    st.markdown("*Analyzing speed, delay, and travel time metrics*")
 
     progress_bar = st.progress(0)
     status_text = st.empty()
