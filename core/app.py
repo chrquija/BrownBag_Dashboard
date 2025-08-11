@@ -521,6 +521,8 @@ with tab1:
                                 tc = performance_chart(filtered_data, "travel")
                                 if tc: st.plotly_chart(tc, use_container_width=True)
 
+                        # Replace the existing Advanced Performance Insights section with this enhanced version:
+
                         if not raw_data.empty:
                             worst_delay = float(np.nanmax(raw_data["average_delay"])) if raw_data[
                                 "average_delay"].notna().any() else 0.0
@@ -536,12 +538,47 @@ with tab1:
                             reliability = max(0, 100 - cv_tt)
                             high_delay_pct = (raw_data["average_delay"] > HIGH_DELAY_SEC).mean() * 100 if raw_data[
                                 "average_delay"].notna().any() else 0.0
+
+                            # Find most congested intersections/segments
+                            try:
+                                segment_congestion = raw_data.groupby("segment_name").agg({
+                                    "average_delay": ["mean", "max"],
+                                    "average_traveltime": "mean"
+                                }).round(1)
+
+                                # Flatten column names
+                                segment_congestion.columns = ["avg_delay", "max_delay", "avg_traveltime"]
+                                segment_congestion = segment_congestion.reset_index()
+
+                                # Rank by average delay (primary) and max delay (secondary)
+                                segment_congestion["congestion_score"] = (
+                                        segment_congestion["avg_delay"] * 0.7 +
+                                        segment_congestion["max_delay"] * 0.3
+                                )
+
+                                top_congested = segment_congestion.nlargest(3, "congestion_score")
+
+                                # Format the top 3 most congested segments
+                                if len(top_congested) > 0:
+                                    congestion_text = ""
+                                    for i, row in top_congested.iterrows():
+                                        segment_short = row["segment_name"].replace(" → ", "→")  # Shorter arrow
+                                        congestion_text += f"{segment_short} ({row['avg_delay']:.0f}s avg)"
+                                        if i < len(top_congested) - 1:
+                                            congestion_text += " • "
+                                else:
+                                    congestion_text = "No congestion data available"
+
+                            except Exception as e:
+                                congestion_text = "Unable to analyze congestion patterns"
+
                             st.markdown(f"""
                             <div class="insight-box">
                                 <h4>💡 Advanced Performance Insights</h4>
                                 <p><strong>📊 Data Overview:</strong> {len(filtered_data):,} {granularity.lower()} observations across {(date_range[1] - date_range[0]).days + 1} days.</p>
                                 <p><strong>🚨 Peaks:</strong> Delay up to {worst_delay:.0f}s ({worst_delay / 60:.1f} min) • Travel time up to {worst_tt:.1f} min (+{tt_delta:.0f}% vs avg).</p>
                                 <p><strong>🎯 Reliability:</strong> {reliability:.0f}% travel time reliability • Delays > {HIGH_DELAY_SEC}s occur {high_delay_pct:.1f}% of hours.</p>
+                                <p><strong>🚧 Most Congested:</strong> {congestion_text}</p>
                                 <p><strong>📌 Action:</strong> {"Critical intervention needed" if worst_delay > CRITICAL_DELAY_SEC else "Optimization recommended" if worst_delay > HIGH_DELAY_SEC else "Monitor trends"}.</p>
                             </div>
                             """, unsafe_allow_html=True)
