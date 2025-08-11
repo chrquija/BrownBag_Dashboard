@@ -356,7 +356,7 @@ def date_range_preset_controls(min_date: datetime.date, max_date: datetime.date,
 # =========================
 # Tabs
 # =========================
-tab1, tab2 = st.tabs(["🚧 Performance & Delay Analysis", "📊 Traffic Demand & Capacity Analysis"])
+tab1, tab2 = st.tabs(["🚧 Iteris ClearGuide Data", "📊 Kinetic Mobility Data"])
 
 # -------------------------
 # TAB 1: Performance / Travel Time
@@ -918,6 +918,8 @@ with tab2:
                                 st.caption(
                                     "Using CVAG thresholds: ≥2400vph→140s, ≥1500vph→130s, ≥600vph→120s, ≥300vph→110s, <300vph→Free")
 
+                                # ADD A LEGEND IN DB TO SHOW THRESHOLDS
+
                             # Map time period selection to filter function parameter
                             period_map = {
                                 "AM (05:00-10:00)": "AM",
@@ -941,7 +943,7 @@ with tab2:
                                 hourly_analysis = period_data.groupby("hour", as_index=False)["total_volume"].mean()
                                 hourly_analysis["Volume"] = hourly_analysis["total_volume"].round(0).astype(int)
 
-                                # Get cycle recommendations
+                                # Get cycle recommendations #language to recommend to cvag "Cycle Length Recommendation for CVAG"
                                 hourly_analysis["CVAG Recommendation"] = hourly_analysis["Volume"].apply(
                                     get_hourly_cycle_length)
 
