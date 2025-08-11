@@ -356,7 +356,7 @@ def date_range_preset_controls(min_date: datetime.date, max_date: datetime.date,
 # =========================
 # Tabs
 # =========================
-tab1, tab2 = st.tabs(["🚧 ITERIS CLEARGUIDE Data!", "📊 KINETIC MOBILITY Data"])
+tab1, tab2 = st.tabs(["1️⃣ ITERIS CLEARGUIDE DATA", "2️⃣ KINETIC MOBILITY DATA"])
 
 # -------------------------
 # TAB 1: Performance / Travel Time
