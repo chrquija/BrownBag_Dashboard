@@ -980,7 +980,7 @@ with tab2:
                                     use_container_width=True,
                                     column_config={
                                         "Hour": st.column_config.TextColumn("Hour", width="small"),
-                                        "Avg Volume (vph)": st.column_config.NumberColumn("Avg Volume (vph)",
+                                        "Avg Volume (vph)": st.column_config.NumberColumn("Total Vehicle Volume",
                                                                                           format="%d"),
                                         "CVAG Recommendation": st.column_config.TextColumn("CVAG Recommendation",
                                                                                            width="medium"),
