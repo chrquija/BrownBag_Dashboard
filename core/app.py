@@ -813,8 +813,6 @@ FOOTER = """
 <style>
   /* Light mode defaults */
   .footer-title { color:#2980b9; margin:0 0 .4rem; font-weight:700; }
-  .footer-sub   { color:#0f2f52; margin:.1rem 0 0; font-size:1.0rem; }
-  .footer-copy  { color:#0f2f52; margin:.2rem 0 0; font-size:.9rem; }
 
   .social-btn {
     width: 40px; height: 40px; display:grid; place-items:center; border-radius:50%;
@@ -831,13 +829,6 @@ FOOTER = """
     transition: transform .15s ease, box-shadow .15s ease;
   }
   .website-pill:hover { transform: translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.12); }
-
-  /* Dark mode: unambiguously white text for the two lines */
-  @media (prefers-color-scheme: dark) {
-    .footer-sub,
-    .footer-copy { color:#ffffff !important; }
-    .footer-title { color:#7ec3ff !important; }
-  }
 </style>
 
 <div class="footer-card" style="text-align:center; padding: 1.25rem;
@@ -847,7 +838,8 @@ FOOTER = """
 
   <h4 class="footer-title">🛣️ Active Transportation & Operations Management Dashboard</h4>
 
-  <p class="footer-sub">
+  <!-- These will turn white in dark mode via JavaScript -->
+  <p class="footer-sub" style="margin:.1rem 0 0; font-size:1.0rem; color:#0f2f52;">
     Powered by Advanced Machine Learning • Real-time Traffic Intelligence • Intelligent Transportation Solutions (ITS)
   </p>
 
@@ -868,8 +860,68 @@ FOOTER = """
     </a>
   </div>
 
-  <p class="footer-copy">© 2025 ADVANTEC Consulting Engineers, Inc. — "Because We Care"</p>
+  <!-- This will turn white in dark mode via JavaScript -->
+  <p class="footer-copy" style="margin:.2rem 0 0; font-size:.9rem; color:#0f2f52;">
+    © 2025 ADVANTEC Consulting Engineers, Inc. — "Because We Care"
+  </p>
 </div>
+
+<script>
+(function() {
+  function updateFooterColors() {
+    // Get Streamlit's current theme by checking computed styles
+    const body = document.body;
+    const computed = getComputedStyle(body);
+    const bgColor = computed.backgroundColor || computed.getPropertyValue('--background-color') || '#ffffff';
+
+    // Simple luminance check: if background is dark, use white text
+    let r, g, b;
+    if (bgColor.startsWith('rgb')) {
+      const match = bgColor.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);
+      if (match) {
+        r = parseInt(match[1]);
+        g = parseInt(match[2]); 
+        b = parseInt(match[3]);
+      } else {
+        r = g = b = 255; // fallback to light
+      }
+    } else {
+      r = g = b = 255; // fallback to light
+    }
+
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    const isDark = luminance < 0.5;
+
+    // Update the two text elements
+    const subtitle = document.querySelector('.footer-sub');
+    const copyright = document.querySelector('.footer-copy');
+    const title = document.querySelector('.footer-title');
+
+    if (subtitle && copyright) {
+      if (isDark) {
+        subtitle.style.color = '#ffffff';
+        copyright.style.color = '#ffffff';
+        if (title) title.style.color = '#7ec3ff';
+      } else {
+        subtitle.style.color = '#0f2f52';
+        copyright.style.color = '#0f2f52';
+        if (title) title.style.color = '#2980b9';
+      }
+    }
+  }
+
+  // Run immediately and on theme changes
+  updateFooterColors();
+
+  // Monitor for theme changes (Streamlit updates these attributes)
+  const observer = new MutationObserver(updateFooterColors);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
+  observer.observe(document.body, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
+
+  // Fallback: check periodically in case theme changes aren't caught
+  setInterval(updateFooterColors, 1000);
+})();
+</script>
 """
 
 st.markdown(FOOTER, unsafe_allow_html=True)
