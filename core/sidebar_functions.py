@@ -57,18 +57,19 @@ def load_volume_data():
 
     try:
         volume_df = pd.read_csv(volume_url)
+
         volume_df["local_datetime"] = pd.to_datetime(volume_df["local_datetime"])
         volume_df = volume_df.sort_values("local_datetime").reset_index(drop=True)
 
-        # Fix intersection names
+        # Create proper intersection names from intersection_id
         volume_df["intersection_name"] = (
             volume_df["intersection_id"]
-            .str.replace("_", " ", regex=False)
-            .str.replace("Washington St and ", "Washington St & ", regex=False)
-            .str.replace(" and ", " & ", regex=False)
+            .str.replace("_", " ")
+            .str.replace("Washington St and ", "Washington St & ")
+            .str.replace(" and ", " & ")
         )
 
-        # Sorting order (south → north)
+        # Create a sorting order for intersections (from south to north along Washington St)
         intersection_order = {
             "Washington St & Avenue52": 1,
             "Washington St & Calle Tampico": 2,
@@ -104,11 +105,6 @@ def get_corridor_df() -> pd.DataFrame:
     if df is None or len(df) == 0:
         return pd.DataFrame()
     df = _safe_to_datetime(df.copy(), "local_datetime")
-
-    # corridor_id in the source is actually a per-segment id; alias it so the rest of the app can use segment_id
-    if "corridor_id" in df.columns and "segment_id" not in df.columns:
-        df["segment_id"] = df["corridor_id"]
-
     needed = {"segment_name", "average_delay", "average_traveltime", "average_speed", "direction"}
     missing = needed - set(df.columns)
     if missing:
@@ -153,12 +149,15 @@ def _coerce_num(s: pd.Series) -> pd.Series:
 
 def compute_perf_kpis_interpretable(df: pd.DataFrame, high_delay_threshold: float) -> dict:
     """
-    Compute five interpretable KPIs for travel-time performance (all minutes except percentages):
+    Compute five interpretable KPIs:
       - avg_tt: Average Travel Time (lower is better)
       - planning_time: 95th percentile travel time (lower is better)
       - buffer_index: (P95 - Mean)/Mean * 100 (lower is better)
       - reliability: 100 - CV(travel_time)% (higher is better)
-      - congestion_freq: % of hours with Delay > threshold (lower is better)
+      - congestion_freq: Share of hours with Delay > threshold (lower is better)
+
+    Returns dict with values, units, normalized 'score' 0..100 (higher = better),
+    and 'help' strings that explain formula + interpretation.
     """
     if df is None or df.empty:
         return {
@@ -174,10 +173,10 @@ def compute_perf_kpis_interpretable(df: pd.DataFrame, high_delay_threshold: floa
         if c in df:
             df[c] = _coerce_num(df[c])
 
-    # Average TT (minutes)
+    # Average TT
     avg_tt = float(np.nanmean(df["average_traveltime"])) if "average_traveltime" in df else 0.0
 
-    # Planning time (P95, minutes)
+    # Planning time (P95)
     if "average_traveltime" in df and df["average_traveltime"].notna().any():
         p95_tt = float(np.nanpercentile(df["average_traveltime"].dropna(), 95))
     else:
@@ -186,7 +185,7 @@ def compute_perf_kpis_interpretable(df: pd.DataFrame, high_delay_threshold: floa
     # Buffer Index
     buffer_index = ((p95_tt - avg_tt) / avg_tt * 100.0) if avg_tt > 0 else 0.0
 
-    # Reliability Index = 100 - CV% (higher is better)
+    # Reliability Index = 100 - CV%
     if avg_tt > 0 and "average_traveltime" in df:
         cv_tt = float(np.nanstd(df["average_traveltime"])) / avg_tt * 100.0
     else:
@@ -201,7 +200,7 @@ def compute_perf_kpis_interpretable(df: pd.DataFrame, high_delay_threshold: floa
     else:
         cong_freq, cong_hours, total_hours = 0.0, 0, 0
 
-    # Normalized scores (0..100, higher = better) for badges
+    # Normalized scores (0..100, higher = better)
     def _minmax_score(series: pd.Series, val: float) -> float:
         series = pd.to_numeric(series, errors="coerce").dropna()
         if len(series) < 2:
@@ -228,32 +227,32 @@ def compute_perf_kpis_interpretable(df: pd.DataFrame, high_delay_threshold: floa
             "value": avg_tt,
             "unit": "min",
             "score": score_avg_tt,
-            "help": "Average Travel Time\n\nPlain: Typical time your trip takes.\nHow to read: Lower is better.\nHow we calculate it: We average all travel times in the selected period.",
+            "help": "Average Travel Time\n\nFormula: mean(travel_time)\nHow to read: Lower is better; typical trip time over the selected period.",
         },
         "planning_time": {
             "value": p95_tt,
             "unit": "min",
             "score": score_plan,
-            "help": "Planning Time (95th)\n\nPlain: A plan‑for time so you’re on time ~19 days out of 20.\nHow to read: Lower is better.\nHow we calculate it: The 95th percentile of travel times.",
+            "help": "Planning Time (95th percentile)\n\nFormula: P95(travel_time)\nHow to read: Lower is better; time you should plan for so 95% of trips arrive on time.",
         },
         "buffer_index": {
             "value": buffer_index,
             "unit": "%",
             "score": score_buffer,
-            "help": "Buffer Index\n\nPlain: Extra percent to add to the average trip to be safe most days.\nHow to read: Lower is better.\nHow we calculate it: (P95 − Mean) / Mean × 100%.",
+            "help": "Buffer Index\n\nFormula: (P95(travel_time) − mean(travel_time)) / mean(travel_time) × 100%\nHow to read: Lower is better; extra margin (percentage) needed to be on time 95% of the time.",
         },
         "reliability": {
             "value": reliability,
             "unit": "%",
             "score": score_reliability,
-            "help": "Reliability Index\n\nPlain: A consistency score for travel time.\nHow to read: Higher is better (100% = very steady).\nHow we calculate it: 100 − CV of travel time (CV = std/mean × 100%).",
+            "help": "Reliability Index\n\nFormula: 100 − Coefficient of Variation of travel time\nCV = std(travel_time)/mean(travel_time) × 100%\nHow to read: Higher is better; 100% is perfectly consistent travel time.",
         },
         "congestion_freq": {
             "value": cong_freq,
             "unit": "%",
             "score": score_congestion,
-            "extra": f"Hours > threshold: {cong_hours}/{total_hours}",
-            "help": "Congestion Frequency\n\nPlain: How often traffic is 'bad'.\nHow to read: Lower is better.\nHow we calculate it: Hours with delay above the threshold ÷ total hours × 100%.",
+            "extra": f"Hours > {high_delay_threshold:.0f}s: {cong_hours}/{total_hours}",
+            "help": f"Congestion Frequency\n\nFormula: hours(delay > {high_delay_threshold:.0f}s) / total_hours × 100%\nHow to read: Lower is better; share of hours with delays above the threshold.",
         },
     }
 
@@ -290,31 +289,49 @@ def performance_chart(data: pd.DataFrame, metric_type: str = "delay"):
         vertical_spacing=0.1,
     )
 
+    # Time series plot
     fig.add_trace(
         go.Scatter(
-            x=dd["local_datetime"], y=dd[y_col], mode="lines+markers",
-            name=f"{metric_type.title()} Trend", line=dict(color=color, width=2), marker=dict(size=4),
+            x=dd["local_datetime"],
+            y=dd[y_col],
+            mode="lines+markers",
+            name=f"{metric_type.title()} Trend",
+            line=dict(color=color, width=2),
+            marker=dict(size=4),
         ),
-        row=1, col=1,
+        row=1,
+        col=1,
     )
 
+    # Distribution histogram
     fig.add_trace(
         go.Histogram(
-            x=dd[y_col], nbinsx=30, name=f"{metric_type.title()} Distribution",
-            marker_color=color, opacity=0.75,
+            x=dd[y_col],
+            nbinsx=30,
+            name=f"{metric_type.title()} Distribution",
+            marker_color=color,
+            opacity=0.75,
         ),
-        row=2, col=1,
+        row=2,
+        col=1,
     )
 
+    # Update layout with proper axis labels
     fig.update_layout(
-        height=600, title=title, showlegend=True, template="plotly_white",
-        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        height=600,
+        title=title,
+        showlegend=True,
+        template="plotly_white",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
     )
 
+    # Update x and y axis labels for both subplots
     fig.update_xaxes(title_text="Date/Time", row=1, col=1)
     fig.update_yaxes(title_text=y_label, row=1, col=1)
     fig.update_xaxes(title_text=dist_x_label, row=2, col=1)
     fig.update_yaxes(title_text="Frequency (Number of Hours)", row=2, col=1)
+
     return fig
 
 
@@ -328,23 +345,32 @@ def volume_charts(
     dd = data.dropna(subset=["local_datetime", "total_volume", "intersection_name"]).copy()
     dd.sort_values("local_datetime", inplace=True)
 
+    # 1) Trend by intersection
     fig1 = px.line(
-        dd, x="local_datetime", y="total_volume", color="intersection_name",
+        dd,
+        x="local_datetime",
+        y="total_volume",
+        color="intersection_name",
         title="📈 Traffic Volume Trends by Intersection",
         labels={"total_volume": "Volume (vehicles/hour)", "local_datetime": "Date/Time"},
         template="plotly_white",
     )
     fig1.update_layout(
-        height=500, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        height=500,
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
 
+    # 2) Distribution + Hourly heatmap
     fig2 = make_subplots(
-        rows=2, cols=1,
+        rows=2,
+        cols=1,
         subplot_titles=("Volume Distribution by Intersection", "Hourly Avg Volume Heatmap"),
         vertical_spacing=0.12,
     )
 
+    # Box plots
     for name, g in dd.groupby("intersection_name", sort=False):
         fig2.add_trace(go.Box(y=g["total_volume"], name=name, boxpoints="outliers"), row=1, col=1)
 
@@ -354,35 +380,54 @@ def volume_charts(
 
     fig2.add_trace(
         go.Heatmap(
-            z=hourly_pivot.values, x=hourly_pivot.columns, y=hourly_pivot.index,
-            colorscale="Blues", showscale=True, colorbar=dict(title="Avg Volume (vph)"),
+            z=hourly_pivot.values,
+            x=hourly_pivot.columns,
+            y=hourly_pivot.index,
+            colorscale="Blues",
+            showscale=True,
+            colorbar=dict(title="Avg Volume (vph)"),
         ),
-        row=2, col=1,
+        row=2,
+        col=1,
     )
     fig2.update_layout(
-        height=800, title="📊 Volume Distribution & Capacity Analysis",
-        template="plotly_white", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        height=800,
+        title="📊 Volume Distribution & Capacity Analysis",
+        template="plotly_white",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
     )
 
+    # 3) Peak hour by intersection
     hourly_volume = dd.groupby(["hour", "intersection_name"], as_index=False)["total_volume"].mean()
     fig3 = px.line(
-        hourly_volume, x="hour", y="total_volume", color="intersection_name",
+        hourly_volume,
+        x="hour",
+        y="total_volume",
+        color="intersection_name",
         title="🕐 Average Hourly Volume Patterns",
         labels={"total_volume": "Average Volume (vph)", "hour": "Hour of Day"},
         template="plotly_white",
     )
     fig3.add_hline(
-        y=theoretical_link_capacity_vph, line_dash="dash", line_color="red",
+        y=theoretical_link_capacity_vph,
+        line_dash="dash",
+        line_color="red",
         annotation_text=f"Theoretical Capacity ({theoretical_link_capacity_vph:,} vph)",
     )
     fig3.add_hline(
-        y=high_volume_threshold_vph, line_dash="dot", line_color="orange",
+        y=high_volume_threshold_vph,
+        line_dash="dot",
+        line_color="orange",
         annotation_text=f"High Volume Threshold ({high_volume_threshold_vph:,} vph)",
     )
     fig3.update_layout(
-        height=500, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        height=500,
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
+
     return fig1, fig2, fig3
 
 
@@ -391,9 +436,12 @@ def volume_charts(
 # =========================
 def date_range_preset_controls(min_date: datetime.date, max_date: datetime.date, key_prefix: str):
     """
-    Presets default to Last 30 Days on first load, persist in session_state.
+    Presets that default to Last 30 Days on first load, persist in session_state,
+    and won't clobber custom picks.
     """
     k_range = f"{key_prefix}_range"
+
+    # Default to LAST 30 DAYS (bounded by min_date)
     if k_range not in st.session_state:
         default_start = max(min_date, max_date - timedelta(days=30))
         st.session_state[k_range] = (default_start, max_date)
@@ -418,6 +466,7 @@ def date_range_preset_controls(min_date: datetime.date, max_date: datetime.date,
     )
     if custom != st.session_state[k_range]:
         st.session_state[k_range] = custom
+
     return st.session_state[k_range]
 
 
@@ -428,8 +477,10 @@ def process_traffic_data(df, date_range, granularity, time_filter=None, start_ho
     """
     Process traffic data based on date range and granularity selections
     """
+    # Convert datetime if not already done
     df["local_datetime"] = pd.to_datetime(df["local_datetime"])
 
+    # Filter by date range
     if len(date_range) == 2:
         start_date, end_date = date_range
         df = df[
@@ -437,15 +488,16 @@ def process_traffic_data(df, date_range, granularity, time_filter=None, start_ho
             & (df["local_datetime"].dt.date <= end_date)
         ]
 
+    # Apply time filters for hourly data
     if granularity == "Hourly" and time_filter:
-        if time_filter == "Peak Hours (7–9 AM, 4–6 PM)":
+        if time_filter == "Peak Hours (7-9 AM, 4-6 PM)":
             df = df[
                 (df["local_datetime"].dt.hour.between(7, 9))
                 | (df["local_datetime"].dt.hour.between(16, 18))
             ]
-        elif time_filter == "AM Peak (7–9 AM)":
+        elif time_filter == "AM Peak (7-9 AM)":
             df = df[df["local_datetime"].dt.hour.between(7, 9)]
-        elif time_filter == "PM Peak (4–6 PM)":
+        elif time_filter == "PM Peak (4-6 PM)":
             df = df[df["local_datetime"].dt.hour.between(16, 18)]
         elif time_filter == "Off-Peak":
             df = df[
@@ -455,10 +507,11 @@ def process_traffic_data(df, date_range, granularity, time_filter=None, start_ho
         elif time_filter == "Custom Range" and start_hour is not None and end_hour is not None:
             df = df[df["local_datetime"].dt.hour.between(start_hour, end_hour - 1)]
 
+    # Determine data type and aggregate accordingly
     if "segment_name" in df.columns:  # Corridor data (delay/speed/travel time)
         if granularity == "Daily":
             df["date_group"] = df["local_datetime"].dt.date
-            grouped = df.groupby(["date_group", "segment_id", "direction", "segment_name"]).agg(
+            grouped = df.groupby(["date_group", "corridor_id", "direction", "segment_name"]).agg(
                 {
                     "average_delay": "mean",
                     "average_traveltime": "mean",
@@ -466,9 +519,10 @@ def process_traffic_data(df, date_range, granularity, time_filter=None, start_ho
                 }
             ).reset_index()
             grouped["local_datetime"] = pd.to_datetime(grouped["date_group"])
+
         elif granularity == "Weekly":
             df["week_group"] = df["local_datetime"].dt.to_period("W").dt.start_time
-            grouped = df.groupby(["week_group", "segment_id", "direction", "segment_name"]).agg(
+            grouped = df.groupby(["week_group", "corridor_id", "direction", "segment_name"]).agg(
                 {
                     "average_delay": "mean",
                     "average_traveltime": "mean",
@@ -476,9 +530,10 @@ def process_traffic_data(df, date_range, granularity, time_filter=None, start_ho
                 }
             ).reset_index()
             grouped["local_datetime"] = grouped["week_group"]
+
         elif granularity == "Monthly":
             df["month_group"] = df["local_datetime"].dt.to_period("M").dt.start_time
-            grouped = df.groupby(["month_group", "segment_id", "direction", "segment_name"]).agg(
+            grouped = df.groupby(["month_group", "corridor_id", "direction", "segment_name"]).agg(
                 {
                     "average_delay": "mean",
                     "average_traveltime": "mean",
@@ -486,7 +541,8 @@ def process_traffic_data(df, date_range, granularity, time_filter=None, start_ho
                 }
             ).reset_index()
             grouped["local_datetime"] = grouped["month_group"]
-        else:  # Hourly
+
+        else:  # Hourly - no aggregation needed
             grouped = df
 
     elif "intersection_id" in df.columns:  # Volume data
@@ -496,21 +552,26 @@ def process_traffic_data(df, date_range, granularity, time_filter=None, start_ho
                 {"total_volume": "sum"}
             ).reset_index()
             grouped["local_datetime"] = pd.to_datetime(grouped["date_group"])
+
         elif granularity == "Weekly":
             df["week_group"] = df["local_datetime"].dt.to_period("W").dt.start_time
             grouped = df.groupby(["week_group", "intersection_id", "direction", "intersection_name"]).agg(
                 {"total_volume": "sum"}
             ).reset_index()
             grouped["local_datetime"] = grouped["week_group"]
+
         elif granularity == "Monthly":
             df["month_group"] = df["local_datetime"].dt.to_period("M").dt.start_time
             grouped = df.groupby(["month_group", "intersection_id", "direction", "intersection_name"]).agg(
                 {"total_volume": "sum"}
             ).reset_index()
             grouped["local_datetime"] = grouped["month_group"]
-        else:  # Hourly
+
+        else:  # Hourly - no aggregation needed
             grouped = df
+
     else:
+        # Fallback - just return filtered data
         grouped = df
 
     return grouped
