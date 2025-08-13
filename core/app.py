@@ -806,32 +806,20 @@ with tab2:
             st.warning("⚠️ Please select both start and end dates to proceed with the volume analysis.")
 
 # =========================
-# Footer (light/dark adaptive for subtitle and copyright)
+# Footer (refined styling + updated tagline)
 # =========================
 import streamlit.components.v1 as components
 
 footer_html = """
-<style>
-  /* Only change colors in dark mode */
-  @media (prefers-color-scheme: dark) {
-    .footer-sub,
-    .footer-copy { color: rgba(255,255,255,0.92) !important; }
-    /* Optional: slightly brighten the title accent in dark */
-    .footer-title { color: #7ec3ff !important; }
-  }
-</style>
-
 <div style="text-align:center; padding: 1.25rem;
     background: linear-gradient(135deg, rgba(79,172,254,0.1), rgba(0,242,254,0.05));
     border-radius: 15px; margin-top: 1rem; border: 1px solid rgba(79,172,254,0.2);
     font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif;">
 
-  <h4 class="footer-title" style="color:#2980b9; margin:0 0 .4rem; font-weight:700;">
+  <h4 style="color:#2980b9; margin:0 0 .4rem; font-weight:700;">
     🛣️ Active Transportation & Operations Management Dashboard
   </h4>
-
-  <!-- This line will turn white in dark mode -->
-  <p class="footer-sub" style="opacity:.85; margin:.1rem 0 0; font-size:1.0rem; color: rgba(15,47,82,0.9);">
+  <p style="opacity:.85; margin:.1rem 0 0; font-size:1.0rem;">
     Powered by Advanced Machine Learning • Real-time Traffic Intelligence • Intelligent Transportation Solutions (ITS)
   </p>
 
@@ -879,14 +867,13 @@ footer_html = """
     </a>
   </div>
 
-  <!-- This line will turn white in dark mode -->
-  <p class="footer-copy" style="opacity:.75; margin:.2rem 0 0; font-size:.9rem; color: rgba(15,47,82,0.8);">
+  <p style="opacity:.65; margin:.2rem 0 0; font-size:.9rem;">
     © 2025 ADVANTEC Consulting Engineers, Inc. — "Because We Care"
   </p>
 </div>
 
 <script>
-  // Subtle hover lift for interactive items in the row
+  // Subtle hover lift for all interactive items in the row
   (function(){
     const items = document.currentScript.previousElementSibling.querySelectorAll('a');
     items.forEach(el => {
