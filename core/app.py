@@ -817,12 +817,14 @@ footer_html = """
     <p style="opacity:0.8; margin:0;">Powered by Advanced Machine Learning • Real-time Traffic Intelligence • Sustainable Transportation Solutions</p>
 
     <div style="display:flex; justify-content:center; gap:14px; margin:12px 0 6px;">
-        <!-- Instagram (IG text badge) -->
-<a href="https://www.instagram.com/advantec98/" target="_blank" rel="noopener noreferrer" aria-label="Instagram"
-   style="width:40px;height:40px;display:grid;place-items:center;border-radius:50%;
-          background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08); text-decoration:none; color:#444;">
-  <span style="font: 700 13px/1 system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial;">IG</span>
-</a>
+        <!-- Instagram -->
+        <a href="https://www.instagram.com/advantec98/" target="_blank" rel="noopener noreferrer" aria-label="Instagram"
+           style="width:40px;height:40px;display:grid;place-items:center;border-radius:50%;
+                  background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08); text-decoration:none;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 448 512" aria-hidden="true" role="img">
+                <path fill="#C13584" d="M224 202.7A53.3 53.3 0 1 0 277.3 256 53.38 53.38 0 0 0 224 202.7Zm124.7-41a54 54 0 0 0-30.9-30.9C293.4 121 224 121 224 121s-69.4 0-93.8 9.8a54 54 0 0 0-30.9 30.9C89.5 147.1 89.5 192 89.5 192s0 44.9 9.8 69.3a54 54 0 0 0 30.9 30.9C153.8 302 224 302 224 302s69.4 0 93.8-9.8a54 54 0 0 0 30.9-30.9C358.5 236.9 358.5 192 358.5 192s0-44.9-9.8-69.3ZM224 338c-82.7 0-149.9-67.2-149.9-149.9S141.3 38.2 224 38.2 373.9 105.4 373.9 188.1 306.7 338 224 338Zm146.4-211.4a21.3 21.3 0 1 1 21.3-21.3 21.3 21.3 0 0 1-21.3 21.3Z"/>
+            </svg>
+        </a>
 
         <!-- LinkedIn -->
         <a href="https://www.linkedin.com/company/advantec-consulting-engineers-inc./posts/?feedView=all" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"
@@ -842,14 +844,14 @@ footer_html = """
             </svg>
         </a>
 
-        <!-- Website -->
-        <a href="https://advantec-usa.com/" target="_blank" rel="noopener noreferrer" aria-label="ADVANTEC Website"
-           style="width:40px;height:40px;display:grid;place-items:center;border-radius:50%;
-                  background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08); text-decoration:none;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 496 512" aria-hidden="true" role="img">
-                <path fill="#2980b9" d="M248 8C111 8 0 119 0 256s111 248 248 248 248-111 248-248S385 8 248 8Zm0 448c-110.3 0-200-89.7-200-200S137.7 56 248 56s200 89.7 200 200-89.7 200-200 200Zm0-344a144 144 0 1 0 144 144A144.16 144.16 0 0 0 248 112Zm0 256a112 112 0 1 1 112-112 112.13 112.13 0 0 1-112 112Zm24-192h-48a8 8 0 0 0-8 8v80a8 8 0 0 0 8 8h80a8 8 0 0 0 8-8v-48a8 8 0 0 0-8-8h-32Z"/>
-            </svg>
-        </a>
+        <!-- Website (clear pill button with label) -->
+<a href="https://advantec-usa.com/" target="_blank" rel="noopener noreferrer" aria-label="ADVANTEC Website"
+   style="height:40px; display:inline-flex; align-items:center; gap:8px; padding:0 12px;
+          border-radius:9999px; background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08);
+          text-decoration:none; border:1px solid #2980b9; color:#2980b9; font-weight:700;">
+  <span style="font-size:18px; line-height:1;">🌐</span>
+  <span>Website</span>
+</a>
     </div>
 
     <p style="opacity:0.6; margin-top: 0.1rem; font-size: 0.9rem;">© 2025 ADVANTEC Platform - Optimizing Transportation Networks</p>
