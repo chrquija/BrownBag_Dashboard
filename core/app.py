@@ -868,7 +868,7 @@ footer_html = """
   </div>
 
   <p style="opacity:.65; margin:.2rem 0 0; font-size:.9rem;">
-    © 2025 ADVANTEC Platform — "Because We Care"
+    © 2025 ADVANTEC Consulting Engineers, Inc. — "Because We Care"
   </p>
 </div>
 
