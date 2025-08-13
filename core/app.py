@@ -820,7 +820,7 @@ footer_html = """
     🛣️ Active Transportation & Operations Management Dashboard
   </h4>
   <p style="opacity:.85; margin:.1rem 0 0; font-size:1.0rem;">
-    Powered by Advanced Machine Learning • Real-time Traffic Intelligence • <strong>Intelligent Transportation Solutions</strong>
+    Powered by Advanced Machine Learning • Real-time Traffic Intelligence • Intelligent Transportation Solutions
   </p>
 
   <!-- Social and website row -->
@@ -868,7 +868,7 @@ footer_html = """
   </div>
 
   <p style="opacity:.65; margin:.2rem 0 0; font-size:.9rem;">
-    © 2025 ADVANTEC Platform — Optimizing Transportation Networks
+    © 2025 ADVANTEC Platform — "Because We Care"
   </p>
 </div>
 
