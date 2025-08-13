@@ -806,39 +806,109 @@ with tab2:
             st.warning("⚠️ Please select both start and end dates to proceed with the volume analysis.")
 
 # =========================
-# Footer (refined styling + updated tagline)
+# Footer (light/dark adaptive)
 # =========================
 import streamlit.components.v1 as components
 
 footer_html = """
-<div style="text-align:center; padding: 1.25rem;
-    background: linear-gradient(135deg, rgba(79,172,254,0.1), rgba(0,242,254,0.05));
-    border-radius: 15px; margin-top: 1rem; border: 1px solid rgba(79,172,254,0.2);
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif;">
+<style>
+  /* Design tokens (light) */
+  :root {
+    --card-bg: linear-gradient(135deg, rgba(79,172,254,0.10), rgba(0,242,254,0.05));
+    --card-border: rgba(79,172,254,0.20);
+    --text-strong: #2980b9;        /* heading accent */
+    --text-main: #0f2f52;          /* primary text */
+    --text-subtle: rgba(0,0,0,0.70);
+    --chip-bg: #ffffff;            /* social circle bg */
+    --chip-border: rgba(41,128,185,0.25);
+    --website-pill-text: #2980b9;
+    --website-pill-border: #2980b9;
+  }
 
-  <h4 style="color:#2980b9; margin:0 0 .4rem; font-weight:700;">
-    🛣️ Active Transportation & Operations Management Dashboard
-  </h4>
-  <p style="opacity:.85; margin:.1rem 0 0; font-size:1.0rem;">
-    Powered by Advanced Machine Learning • Real-time Traffic Intelligence • Intelligent Transportation Solutions (ITS)
-  </p>
+  /* Dark mode overrides */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --card-bg: linear-gradient(135deg, rgba(41,128,185,0.18), rgba(0,242,254,0.10));
+      --card-border: rgba(79,172,254,0.35);
+      --text-strong: #7ec3ff;                    /* heading accent in dark */
+      --text-main: rgba(255,255,255,0.92);
+      --text-subtle: rgba(255,255,255,0.75);
+      --chip-bg: #ffffff;                        /* keep social circles white for contrast */
+      --chip-border: rgba(126,195,255,0.55);
+      --website-pill-text: #7ec3ff;
+      --website-pill-border: #7ec3ff;
+    }
+  }
 
-  <!-- Social and website row -->
-  <div style="display:flex; justify-content:center; align-items:center; gap:14px; margin:12px 0 8px;">
-    <!-- Instagram (IG text badge for clarity/consistency) -->
-    <a href="https://www.instagram.com/advantec98/" target="_blank" rel="noopener noreferrer" aria-label="Instagram"
-       style="width:40px;height:40px;display:grid;place-items:center;border-radius:50%;
-              background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08); text-decoration:none;
-              color:#444; border:1px solid rgba(41,128,185,.25); transition:transform .15s ease, box-shadow .15s ease;">
-      <span style="font:700 13px/1 system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial;">IG</span>
+  .footer-card {
+    text-align: center;
+    padding: 1.25rem;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 15px;
+    margin-top: 1rem;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif;
+  }
+  .footer-title {
+    color: var(--text-strong);
+    margin: 0 0 .4rem;
+    font-weight: 700;
+  }
+  .footer-sub {
+    color: var(--text-subtle);
+    margin: .1rem 0 0;
+    font-size: 1.0rem;
+  }
+  .footer-row {
+    display: flex; justify-content: center; align-items: center;
+    gap: 14px; margin: 12px 0 8px;
+  }
+  .social-btn {
+    width: 40px; height: 40px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    background: var(--chip-bg);
+    border: 1px solid var(--chip-border);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    text-decoration: none;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .social-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.12); }
+  .ig-text {
+    font: 700 13px/1 system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial;
+    color: #444;
+  }
+  .website-pill {
+    height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px;
+    border-radius: 9999px; background: var(--chip-bg);
+    border: 1px solid var(--website-pill-border);
+    color: var(--website-pill-text);
+    font-weight: 700; text-decoration: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .website-pill:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.12); }
+
+  .footer-copy {
+    color: var(--text-subtle);
+    margin: .2rem 0 0;
+    font-size: .9rem;
+  }
+</style>
+
+<div class="footer-card">
+  <h4 class="footer-title">🛣️ Active Transportation & Operations Management Dashboard</h4>
+  <p class="footer-sub">Powered by Advanced Machine Learning • Real-time Traffic Intelligence • Intelligent Transportation Solutions (ITS)</p>
+
+  <div class="footer-row">
+    <!-- Instagram (IG text badge) -->
+    <a class="social-btn" href="https://www.instagram.com/advantec98/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+      <span class="ig-text">IG</span>
     </a>
 
     <!-- LinkedIn -->
-    <a href="https://www.linkedin.com/company/advantec-consulting-engineers-inc./posts/?feedView=all"
-       target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"
-       style="width:40px;height:40px;display:grid;place-items:center;border-radius:50%;
-              background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08); text-decoration:none;
-              border:1px solid rgba(41,128,185,.25); transition:transform .15s ease, box-shadow .15s ease;">
+    <a class="social-btn" href="https://www.linkedin.com/company/advantec-consulting-engineers-inc./posts/?feedView=all"
+       target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 448 512" aria-hidden="true" role="img">
         <path fill="#0A66C2"
               d="M100.28 448H7.4V148.9h92.88zM53.79 108.1C24.09 108.1 0 83.5 0 53.8 0 24.1 24.1 0 53.79 0s53.8 24.1 53.8 53.8c0 29.7-24.1 54.3-53.8 54.3zM447.9 448h-92.68V302.4c0-34.7-.7-79.3-48.3-79.3-48.3 0-55.7 37.7-55.7 76.6V448h-92.7V148.9h89V185h1.3c12.4-23.6 42.7-48.3 87.8-48.3 93.9 0 111.2 61.8 111.2 142.3V448z"/>
@@ -846,42 +916,22 @@ footer_html = """
     </a>
 
     <!-- Facebook -->
-    <a href="https://www.facebook.com/advantecconsultingUSA" target="_blank" rel="noopener noreferrer" aria-label="Facebook"
-       style="width:40px;height:40px;display:grid;place-items:center;border-radius:50%;
-              background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08); text-decoration:none;
-              border:1px solid rgba(41,128,185,.25); transition:transform .15s ease, box-shadow .15s ease;">
+    <a class="social-btn" href="https://www.facebook.com/advantecconsultingUSA" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 320 512" aria-hidden="true" role="img">
         <path fill="#1877F2"
               d="M279.14 288l14.22-92.66h-88.91v-60.13c0-25.35 12.42-50.06 52.24-50.06h40.42V6.26S263.61 0 225.36 0c-73.22 0-121 44.38-121 124.72v70.62H22.89V288h81.47v224h100.2V288z"/>
       </svg>
     </a>
 
-    <!-- Website: clear pill button with label for clarity -->
-    <a href="https://advantec-usa.com/" target="_blank" rel="noopener noreferrer" aria-label="ADVANTEC Website"
-       style="height:40px; display:inline-flex; align-items:center; gap:8px; padding:0 12px;
-              border-radius:9999px; background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08);
-              text-decoration:none; border:1px solid #2980b9; color:#2980b9; font-weight:700;
-              transition:transform .15s ease, box-shadow .15s ease;">
+    <!-- Website -->
+    <a class="website-pill" href="https://advantec-usa.com/" target="_blank" rel="noopener noreferrer" aria-label="ADVANTEC Website">
       <span style="font-size:18px; line-height:1;">🌐</span>
       <span>Website</span>
     </a>
   </div>
 
-  <p style="opacity:.65; margin:.2rem 0 0; font-size:.9rem;">
-    © 2025 ADVANTEC Consulting Engineers, Inc. — "Because We Care"
-  </p>
+  <p class="footer-copy">© 2025 ADVANTEC Consulting Engineers, Inc. — "Because We Care"</p>
 </div>
-
-<script>
-  // Subtle hover lift for all interactive items in the row
-  (function(){
-    const items = document.currentScript.previousElementSibling.querySelectorAll('a');
-    items.forEach(el => {
-      el.addEventListener('mouseenter', () => { el.style.transform = 'translateY(-1px)'; });
-      el.addEventListener('mouseleave', () => { el.style.transform = 'translateY(0)'; });
-    });
-  })();
-</script>
 """
 
-components.html(footer_html, height=200)
+components.html(footer_html, height=220)
