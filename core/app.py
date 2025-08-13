@@ -807,13 +807,11 @@ with tab2:
             st.warning("⚠️ Please select both start and end dates to proceed with the volume analysis.")
 
 # =========================
-# FOOTER (robust dark/light detection; pure white in dark)
+# FOOTER (force subtitle + copyright to white in dark mode)
 # =========================
-import streamlit as st
-
 FOOTER = """
 <style>
-  /* --- Light mode defaults (solid text, no opacity) --- */
+  /* Light mode defaults */
   .footer-title { color:#2980b9; margin:0 0 .4rem; font-weight:700; }
   .footer-sub   { color:#0f2f52; margin:.1rem 0 0; font-size:1.0rem; }
   .footer-copy  { color:#0f2f52; margin:.2rem 0 0; font-size:.9rem; }
@@ -825,6 +823,7 @@ FOOTER = """
     transition: transform .15s ease, box-shadow .15s ease;
   }
   .social-btn:hover { transform: translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.12); }
+
   .website-pill {
     height:40px; display:inline-flex; align-items:center; gap:8px; padding:0 12px;
     border-radius:9999px; background:#ffffff; border:1px solid #2980b9; color:#2980b9;
@@ -833,11 +832,12 @@ FOOTER = """
   }
   .website-pill:hover { transform: translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.12); }
 
-  /* --- Dark mode overrides (pure white; most specific) --- */
-  html.is-dark .footer-sub,
-  html.is-dark .footer-copy { color:#ffffff !important; }
-  html.is-dark .footer-title { color:#7ec3ff !important; }
-  html.is-dark .footer-card { border-color: rgba(79,172,254,0.35) !important; }
+  /* Dark mode: unambiguously white text for the two lines */
+  @media (prefers-color-scheme: dark) {
+    .footer-sub,
+    .footer-copy { color:#ffffff !important; }
+    .footer-title { color:#7ec3ff !important; }
+  }
 </style>
 
 <div class="footer-card" style="text-align:center; padding: 1.25rem;
@@ -870,47 +870,6 @@ FOOTER = """
 
   <p class="footer-copy">© 2025 ADVANTEC Consulting Engineers, Inc. — "Because We Care"</p>
 </div>
-
-<script>
-/* Dark-mode detection that works across Streamlit versions:
-   - reads CSS var --background-color or body background
-   - computes luminance and toggles html.is-dark accordingly
-   - re-checks when Streamlit swaps themes */
-(function(){
-  const html = document.documentElement;
-
-  function toLum(color){
-    // expects rgb/rgba or hex; returns relative luminance 0..1
-    let r,g,b;
-    if(/^#/.test(color)){
-      const c = color.slice(1);
-      if(c.length===3){ r=parseInt(c[0]+c[0],16); g=parseInt(c[1]+c[1],16); b=parseInt(c[2]+c[2],16); }
-      else { r=parseInt(c.slice(0,2),16); g=parseInt(c.slice(2,4),16); b=parseInt(c.slice(4,6),16); }
-    } else {
-      const m = color.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/i);
-      if(!m){ return 1; }
-      r=+m[1]; g=+m[2]; b=+m[3];
-    }
-    [r,g,b] = [r,g,b].map(v=>{ v/=255; return v<=0.03928? v/12.92 : Math.pow((v+0.055)/1.055, 2.4); });
-    return 0.2126*r + 0.7152*g + 0.0722*b;
-  }
-
-  function setMode(){
-    const csRoot = getComputedStyle(document.documentElement);
-    let bg = csRoot.getPropertyValue('--background-color').trim();
-    if(!bg) bg = getComputedStyle(document.body).backgroundColor || '#ffffff';
-    const isDark = toLum(bg) < 0.5;
-    html.classList.toggle('is-dark', isDark);
-  }
-
-  setMode();
-  // observe likely attributes Streamlit changes
-  new MutationObserver(setMode).observe(document.documentElement, { attributes:true, attributeFilter:['style','data-theme','data-base-theme'] });
-  new MutationObserver(setMode).observe(document.body, { attributes:true, attributeFilter:['style','data-theme'] });
-  // periodic fallback (some themes swap stylesheets asynchronously)
-  setInterval(setMode, 800);
-})();
-</script>
 """
 
 st.markdown(FOOTER, unsafe_allow_html=True)
