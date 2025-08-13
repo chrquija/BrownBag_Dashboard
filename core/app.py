@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import time
-
+import streamlit.components.v1 as components
 
 # Plotly (figures are created in helpers; keeping imports is harmless)
 import plotly.express as px
@@ -809,12 +809,24 @@ with tab2:
 # =========================
 # Footer (subtitle + copyright forced white in dark mode)
 # =========================
-FOOTER = """
+footer_html = """
 <style>
-  /* Light mode defaults */
+  /* Default (light mode) colors */
   .footer-title { color:#2980b9; margin:0 0 .4rem; font-weight:700; }
-  .footer-sub   { color: rgba(15,47,82,0.90); opacity:.90; margin:.1rem 0 0; font-size:1.0rem; }
-  .footer-copy  { color: rgba(15,47,82,0.85); opacity:.85; margin:.2rem 0 0; font-size:.9rem; }
+  .footer-sub   { color: rgba(15,47,82,0.90); opacity:.85; margin:.1rem 0 0; font-size:1.0rem; }
+  .footer-copy  { color: rgba(15,47,82,0.80); opacity:.75; margin:.2rem 0 0; font-size:.9rem; }
+
+  /* Force white in dark mode — reliable in Streamlit iframe */
+  html, body, .footer-sub, .footer-copy {
+    color: #ffffff !important;
+    opacity: .95 !important;
+  }
+  .footer-title { color: #7ec3ff !important; }
+
+  /* Optional: slightly stronger border in dark mode */
+  @media (prefers-color-scheme: dark), (color-scheme: dark) {
+    .footer-card { border-color: rgba(79,172,254,0.35) !important; }
+  }
 
   .social-btn {
     width: 40px; height: 40px; display:grid; place-items:center; border-radius:50%;
@@ -823,6 +835,7 @@ FOOTER = """
     transition: transform .15s ease, box-shadow .15s ease;
   }
   .social-btn:hover { transform: translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.12); }
+
   .website-pill {
     height:40px; display:inline-flex; align-items:center; gap:8px; padding:0 12px;
     border-radius:9999px; background:#ffffff; border:1px solid #2980b9; color:#2980b9;
@@ -830,25 +843,6 @@ FOOTER = """
     transition: transform .15s ease, box-shadow .15s ease;
   }
   .website-pill:hover { transform: translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.12); }
-
-  /* Dark mode (cover several Streamlit selectors) */
-  html.dark .footer-sub,
-  html[data-theme="dark"] .footer-sub,
-  html[data-base-theme="dark"] .footer-sub,
-  body[data-theme="dark"] .footer-sub { color:#ffffff !important; opacity:.95 !important; }
-
-  html.dark .footer-copy,
-  html[data-theme="dark"] .footer-copy,
-  html[data-base-theme="dark"] .footer-copy,
-  body[data-theme="dark"] .footer-copy { color:#ffffff !important; opacity:.95 !important; }
-
-  html.dark .footer-title,
-  html[data-theme="dark"] .footer-title,
-  html[data-base-theme="dark"] .footer-title { color:#7ec3ff !important; }
-
-  html.dark .footer-card,
-  html[data-theme="dark"] .footer-card,
-  html[data-base-theme="dark"] .footer-card { border-color: rgba(79,172,254,0.35) !important; }
 </style>
 
 <div class="footer-card" style="text-align:center; padding: 1.25rem;
@@ -866,13 +860,16 @@ FOOTER = """
     <a class="social-btn" href="https://www.instagram.com/advantec98/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
       <span style="font:700 13px/1 system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial; color:#444;">IG</span>
     </a>
+
     <a class="social-btn" href="https://www.linkedin.com/company/advantec-consulting-engineers-inc./posts/?feedView=all"
        target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 448 512" aria-hidden="true"><path fill="#0A66C2" d="M100.28 448H7.4V148.9h92.88zM53.79 108.1C24.09 108.1 0 83.5 0 53.8 0 24.1 24.1 0 53.79 0s53.8 24.1 53.8 53.8c0 29.7-24.1 54.3-53.8 54.3zM447.9 448h-92.68V302.4c0-34.7-.7-79.3-48.3-79.3-48.3 0-55.7 37.7-55.7 76.6V448h-92.7V148.9h89V185h1.3c12.4-23.6 42.7-48.3 87.8-48.3 93.9 0 111.2 61.8 111.2 142.3V448z"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 448 512"><path fill="#0A66C2" d="M100.28 448H7.4V148.9h92.88zM53.79 108.1C24.09 108.1 0 83.5 0 53.8 0 24.1 24.1 0 53.79 0s53.8 24.1 53.8 53.8c0 29.7-24.1 54.3-53.8 54.3zM447.9 448h-92.68V302.4c0-34.7-.7-79.3-48.3-79.3-48.3 0-55.7 37.7-55.7 76.6V448h-92.7V148.9h89V185h1.3c12.4-23.6 42.7-48.3 87.8-48.3 93.9 0 111.2 61.8 111.2 142.3V448z"/></svg>
     </a>
+
     <a class="social-btn" href="https://www.facebook.com/advantecconsultingUSA" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 320 512" aria-hidden="true"><path fill="#1877F2" d="M279.14 288l14.22-92.66h-88.91v-60.13c0-25.35 12.42-50.06 52.24-50.06h40.42V6.26S263.61 0 225.36 0c-73.22 0-121 44.38-121 124.72v70.62H22.89V288h81.47v224h100.2V288z"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 320 512"><path fill="#1877F2" d="M279.14 288l14.22-92.66h-88.91v-60.13c0-25.35 12.42-50.06 52.24-50.06h40.42V6.26S263.61 0 225.36 0c-73.22 0-121 44.38-121 124.72v70.62H22.89V288h81.47v224h100.2V288z"/></svg>
     </a>
+
     <a class="website-pill" href="https://advantec-usa.com/" target="_blank" rel="noopener noreferrer" aria-label="ADVANTEC Website">
       <span style="font-size:18px; line-height:1;">🌐</span>
       <span>Website</span>
@@ -881,24 +878,6 @@ FOOTER = """
 
   <p class="footer-copy">© 2025 ADVANTEC Consulting Engineers, Inc. — "Because We Care"</p>
 </div>
-
-<script>
-/* Watch Streamlit theme attributes and toggle a .dark class on <html> */
-(function(){
-  const el = document.documentElement;
-  const setDark = () => {
-    const isDark =
-      el.getAttribute('data-theme') === 'dark' ||
-      el.getAttribute('data-base-theme') === 'dark' ||
-      document.body.getAttribute('data-theme') === 'dark';
-    el.classList.toggle('dark', !!isDark);
-  };
-  new MutationObserver(setDark).observe(el, { attributes: true, attributeFilter: ['data-theme','data-base-theme'] });
-  setDark();
-})();
-</script>
 """
 
-# Render inside the main DOM, not an iframe
-st.markdown(FOOTER, unsafe_allow_html=True)
-
+components.html(footer_html, height=200)
