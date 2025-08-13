@@ -814,6 +814,50 @@ st.markdown("""
     border-radius: 15px; margin-top: 1rem; border: 1px solid rgba(79,172,254,0.2);">
     <h4 style="color:#2980b9; margin-bottom: 0.5rem;">🛣️ Active Transportation & Operations Management Dashboard</h4>
     <p style="opacity:0.8; margin:0;">Powered by Advanced Machine Learning • Real-time Traffic Intelligence • Sustainable Transportation Solutions</p>
-    <p style="opacity:0.6; margin-top: 0.25rem; font-size: 0.9rem;">© 2025 ADVANTEC Platform - Optimizing Transportation Networks</p>
+
+    <!-- Social icons -->
+    <div class="footer-social" style="display:flex; justify-content:center; gap:14px; margin:12px 0 6px;">
+        <!-- Instagram -->
+        <a href="https://www.instagram.com/advantec98/" target="_blank" rel="noopener noreferrer" aria-label="Instagram"
+           style="width:40px;height:40px;display:grid;place-items:center;border-radius:50%;
+                  background:rgba(255,255,255,0.9); box-shadow:0 2px 8px rgba(0,0,0,0.08); text-decoration:none;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" width="20" height="20" role="img" aria-hidden="true">
+                <path fill="#C13584"
+                      d="M224 202.7A53.3 53.3 0 1 0 277.3 256 53.38 53.38 0 0 0 224 202.7Zm124.7-41a54 54 0 0 0-30.9-30.9C293.4 121 224 121 224 121s-69.4 0-93.8 9.8a54 54 0 0 0-30.9 30.9C89.5 147.1 89.5 192 89.5 192s0 44.9 9.8 69.3a54 54 0 0 0 30.9 30.9C153.8 302 224 302 224 302s69.4 0 93.8-9.8a54 54 0 0 0 30.9-30.9C358.5 236.9 358.5 192 358.5 192s0-44.9-9.8-69.3ZM224 338c-82.7 0-149.9-67.2-149.9-149.9S141.3 38.2 224 38.2 373.9 105.4 373.9 188.1 306.7 338 224 338Zm146.4-211.4a21.3 21.3 0 1 1 21.3-21.3 21.3 21.3 0 0 1-21.3 21.3Z"/>
+            </svg>
+        </a>
+
+        <!-- LinkedIn -->
+        <a href="https://www.linkedin.com/company/advantec-consulting-engineers-inc./posts/?feedView=all" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"
+           style="width:40px;height:40px;display:grid;place-items:center;border-radius:50%;
+                  background:rgba(255,255,255,0.9); box-shadow:0 2px 8px rgba(0,0,0,0.08); text-decoration:none;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" width="20" height="20" role="img" aria-hidden="true">
+                <path fill="#0A66C2"
+                      d="M100.28 448H7.4V148.9h92.88zM53.79 108.1C24.09 108.1 0 83.5 0 53.8 0 24.1 24.1 0 53.79 0s53.8 24.1 53.8 53.8c0 29.7-24.1 54.3-53.8 54.3zM447.9 448h-92.68V302.4c0-34.7-.7-79.3-48.3-79.3-48.3 0-55.7 37.7-55.7 76.6V448h-92.7V148.9h89V185h1.3c12.4-23.6 42.7-48.3 87.8-48.3 93.9 0 111.2 61.8 111.2 142.3V448z"/>
+            </svg>
+        </a>
+
+        <!-- Facebook -->
+        <a href="https://www.facebook.com/advantecconsultingUSA" target="_blank" rel="noopener noreferrer" aria-label="Facebook"
+           style="width:40px;height:40px;display:grid;place-items:center;border-radius:50%;
+                  background:rgba(255,255,255,0.9); box-shadow:0 2px 8px rgba(0,0,0,0.08); text-decoration:none;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512" width="20" height="20" role="img" aria-hidden="true">
+                <path fill="#1877F2"
+                      d="M279.14 288l14.22-92.66h-88.91v-60.13c0-25.35 12.42-50.06 52.24-50.06h40.42V6.26S263.61 0 225.36 0c-73.22 0-121 44.38-121 124.72v70.62H22.89V288h81.47v224h100.2V288z"/>
+            </svg>
+        </a>
+
+        <!-- Advantec website -->
+        <a href="https://advantec-usa.com/" target="_blank" rel="noopener noreferrer" aria-label="ADVANTEC Website"
+           style="width:40px;height:40px;display:grid;place-items:center;border-radius:50%;
+                  background:rgba(255,255,255,0.9); box-shadow:0 2px 8px rgba(0,0,0,0.08); text-decoration:none;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512" width="20" height="20" role="img" aria-hidden="true">
+                <path fill="#2980b9"
+                      d="M248 8C111 8 0 119 0 256s111 248 248 248 248-111 248-248S385 8 248 8Zm0 448c-110.3 0-200-89.7-200-200S137.7 56 248 56s200 89.7 200 200-89.7 200-200 200Zm0-344a144 144 0 1 0 144 144A144.16 144.16 0 0 0 248 112Zm0 256a112 112 0 1 1 112-112 112.13 112.13 0 0 1-112 112Zm24-192h-48a8 8 0 0 0-8 8v80a8 8 0 0 0 8 8h80a8 8 0 0 0 8-8v-48a8 8 0 0 0-8-8h-32Z"/>
+            </svg>
+        </a>
+    </div>
+
+    <p style="opacity:0.6; margin-top: 0.1rem; font-size: 0.9rem;">© 2025 ADVANTEC Platform - Optimizing Transportation Networks</p>
 </div>
 """, unsafe_allow_html=True)
