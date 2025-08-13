@@ -850,7 +850,6 @@ footer_html = """
           border-radius:9999px; background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08);
           text-decoration:none; border:1px solid #2980b9; color:#2980b9; font-weight:700;">
   <span style="font-size:18px; line-height:1;">🌐</span>
-  <span>Website</span>
 </a>
     </div>
 
