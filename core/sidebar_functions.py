@@ -126,6 +126,9 @@ def get_volume_df() -> pd.DataFrame:
 
 
 def get_performance_rating(score: float):
+    """
+    Map a 0..100 score to a label + CSS class used by the UI badges.
+    """
     if score > 80:
         return "🟢 Excellent", "badge-excellent"
     if score > 60:
@@ -135,6 +138,131 @@ def get_performance_rating(score: float):
     if score > 20:
         return "🟠 Poor", "badge-poor"
     return "🔴 Critical", "badge-critical"
+
+
+# =========================
+# Interpretable KPI helpers (for Performance tab)
+# =========================
+def _coerce_num(s: pd.Series) -> pd.Series:
+    return pd.to_numeric(s, errors="coerce")
+
+
+def compute_perf_kpis_interpretable(df: pd.DataFrame, high_delay_threshold: float) -> dict:
+    """
+    Compute five interpretable KPIs:
+      - avg_tt: Average Travel Time (lower is better)
+      - planning_time: 95th percentile travel time (lower is better)
+      - buffer_index: (P95 - Mean)/Mean * 100 (lower is better)
+      - reliability: 100 - CV(travel_time)% (higher is better)
+      - congestion_freq: Share of hours with Delay > threshold (lower is better)
+
+    Returns dict with values, units, normalized 'score' 0..100 (higher = better),
+    and 'help' strings that explain formula + interpretation.
+    """
+    if df is None or df.empty:
+        return {
+            "avg_tt": {"value": 0.0, "unit": "min", "score": 50.0, "help": "Average Travel Time"},
+            "planning_time": {"value": 0.0, "unit": "min", "score": 50.0, "help": "Planning Time (95th)"},
+            "buffer_index": {"value": 0.0, "unit": "%", "score": 50.0, "help": "Buffer Index"},
+            "reliability": {"value": 0.0, "unit": "%", "score": 50.0, "help": "Reliability Index"},
+            "congestion_freq": {"value": 0.0, "unit": "%", "score": 50.0, "help": "Congestion Frequency"},
+        }
+
+    # Coerce numeric
+    for c in ("average_delay", "average_traveltime", "average_speed"):
+        if c in df:
+            df[c] = _coerce_num(df[c])
+
+    # Average TT
+    avg_tt = float(np.nanmean(df["average_traveltime"])) if "average_traveltime" in df else 0.0
+
+    # Planning time (P95)
+    if "average_traveltime" in df and df["average_traveltime"].notna().any():
+        p95_tt = float(np.nanpercentile(df["average_traveltime"].dropna(), 95))
+    else:
+        p95_tt = 0.0
+
+    # Buffer Index
+    buffer_index = ((p95_tt - avg_tt) / avg_tt * 100.0) if avg_tt > 0 else 0.0
+
+    # Reliability Index = 100 - CV%
+    if avg_tt > 0 and "average_traveltime" in df:
+        cv_tt = float(np.nanstd(df["average_traveltime"])) / avg_tt * 100.0
+    else:
+        cv_tt = 0.0
+    reliability = max(0.0, 100.0 - cv_tt)
+
+    # Congestion Frequency (% of hours with delay > threshold)
+    if "average_delay" in df and df["average_delay"].notna().any():
+        total_hours = int(df["average_delay"].count())
+        cong_hours = int((df["average_delay"] > high_delay_threshold).sum())
+        cong_freq = (cong_hours / total_hours * 100.0) if total_hours > 0 else 0.0
+    else:
+        cong_freq, cong_hours, total_hours = 0.0, 0, 0
+
+    # Normalized scores (0..100, higher = better)
+    def _minmax_score(series: pd.Series, val: float) -> float:
+        series = pd.to_numeric(series, errors="coerce").dropna()
+        if len(series) < 2:
+            return 50.0
+        mn, mx = float(series.min()), float(series.max())
+        if mx <= mn:
+            return 50.0
+        # lower is better -> invert
+        frac = (val - mn) / (mx - mn)
+        return float(max(0.0, min(100.0, 100.0 * (1.0 - frac))))
+
+    if "average_traveltime" in df and df["average_traveltime"].notna().any():
+        score_avg_tt = _minmax_score(df["average_traveltime"], avg_tt)
+        score_plan = _minmax_score(df["average_traveltime"], p95_tt)
+    else:
+        score_avg_tt = score_plan = 50.0
+
+    score_buffer = float(max(0.0, 100.0 - min(max(buffer_index, 0.0), 100.0)))
+    score_reliability = float(max(0.0, min(100.0, reliability)))
+    score_congestion = float(max(0.0, min(100.0, 100.0 - cong_freq)))
+
+    return {
+        "avg_tt": {
+            "value": avg_tt,
+            "unit": "min",
+            "score": score_avg_tt,
+            "help": "Average Travel Time\n\nFormula: mean(travel_time)\nHow to read: Lower is better; typical trip time over the selected period.",
+        },
+        "planning_time": {
+            "value": p95_tt,
+            "unit": "min",
+            "score": score_plan,
+            "help": "Planning Time (95th percentile)\n\nFormula: P95(travel_time)\nHow to read: Lower is better; time you should plan for so 95% of trips arrive on time.",
+        },
+        "buffer_index": {
+            "value": buffer_index,
+            "unit": "%",
+            "score": score_buffer,
+            "help": "Buffer Index\n\nFormula: (P95(travel_time) − mean(travel_time)) / mean(travel_time) × 100%\nHow to read: Lower is better; extra margin (percentage) needed to be on time 95% of the time.",
+        },
+        "reliability": {
+            "value": reliability,
+            "unit": "%",
+            "score": score_reliability,
+            "help": "Reliability Index\n\nFormula: 100 − Coefficient of Variation of travel time\nCV = std(travel_time)/mean(travel_time) × 100%\nHow to read: Higher is better; 100% is perfectly consistent travel time.",
+        },
+        "congestion_freq": {
+            "value": cong_freq,
+            "unit": "%",
+            "score": score_congestion,
+            "extra": f"Hours > {high_delay_threshold:.0f}s: {cong_hours}/{total_hours}",
+            "help": f"Congestion Frequency\n\nFormula: hours(delay > {high_delay_threshold:.0f}s) / total_hours × 100%\nHow to read: Lower is better; share of hours with delays above the threshold.",
+        },
+    }
+
+
+def render_badge(score: float) -> str:
+    """
+    Turn a 0..100 'goodness' score into your visual badge HTML, using get_performance_rating.
+    """
+    label, css = get_performance_rating(score)
+    return f'<span class="performance-badge {css}">{label}</span>'
 
 
 # =========================

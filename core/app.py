@@ -22,6 +22,8 @@ from sidebar_functions import (
     performance_chart,
     volume_charts,
     date_range_preset_controls,
+    compute_perf_kpis_interpretable,
+    render_badge
 )
 
 # Cycle length section (moved out)
@@ -257,59 +259,53 @@ with tab1:
                                 if col in raw_data:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
 
-                            col1, col2, col3, col4, col5 = st.columns(5)
+                            # After coercing numeric types, replace the old col1..col5 KPI block with this:
 
-                            # KPI 1: Reliability Index (kept)
-                            with col1:
-                                if raw_data["average_traveltime"].notna().any():
-                                    avg_tt = float(np.nanmean(raw_data["average_traveltime"]))
-                                    cv_tt = float(np.nanstd(raw_data["average_traveltime"]) / avg_tt) * 100 if avg_tt > 0 else 0
-                                else:
-                                    avg_tt, cv_tt = 0.0, 0.0
-                                reliability = max(0, 100 - cv_tt)
-                                rel_rating, badge = get_performance_rating(reliability)
-                                st.metric("🎯 Reliability Index", f"{reliability:.0f}%", delta=f"CV: {cv_tt:.1f}%")
-                                st.markdown(f'<span class="performance-badge {badge}">{rel_rating}</span>', unsafe_allow_html=True)
+                            # --- Five KPI row (interpretable + badges) ---
+                            k = compute_perf_kpis_interpretable(raw_data, HIGH_DELAY_SEC)
 
-                            # KPI 2: Congestion Frequency (kept)
-                            with col2:
-                                high_delay_pct = (
-                                    (raw_data["average_delay"] > HIGH_DELAY_SEC).mean() * 100
-                                    if raw_data["average_delay"].notna().any()
-                                    else 0.0
+                            c1, c2, c3, c4, c5 = st.columns(5)
+
+                            with c1:
+                                st.metric(
+                                    "🎯 Reliability Index",
+                                    f"{k['reliability']['value']:.0f}{k['reliability']['unit']}",
+                                    help=k['reliability']['help'],
                                 )
-                                hours = (
-                                    int((raw_data["average_delay"] > HIGH_DELAY_SEC).sum())
-                                    if raw_data["average_delay"].notna().any()
-                                    else 0
+                                st.markdown(render_badge(k['reliability']['score']), unsafe_allow_html=True)
+
+                            with c2:
+                                st.metric(
+                                    "⚠️ Congestion Frequency",
+                                    f"{k['congestion_freq']['value']:.1f}{k['congestion_freq']['unit']}",
+                                    help=k['congestion_freq']['help'],
                                 )
-                                freq_rating, badge = get_performance_rating(100 - high_delay_pct)
-                                st.metric("⚠️ Congestion Frequency", f"{high_delay_pct:.1f}%", delta=f"{hours} hours")
-                                st.markdown(f'<span class="performance-badge {badge}">{freq_rating}</span>', unsafe_allow_html=True)
+                                st.caption(k['congestion_freq'].get('extra', ''))
+                                st.markdown(render_badge(k['congestion_freq']['score']), unsafe_allow_html=True)
 
-                            # KPI 3: Planning Time (95th percentile travel time)
-                            with col3:
-                                if raw_data["average_traveltime"].notna().any():
-                                    p95_tt = float(np.nanpercentile(raw_data["average_traveltime"].dropna(), 95))
-                                    med_tt = float(np.nanmedian(raw_data["average_traveltime"].dropna()))
-                                else:
-                                    p95_tt, med_tt = 0.0, 0.0
-                                st.metric("🗺️ Planning Time (95th)", f"{p95_tt:.1f} min", delta=f"Median: {med_tt:.1f} min")
+                            with c3:
+                                st.metric(
+                                    "⏱️ Average Travel Time",
+                                    f"{k['avg_tt']['value']:.1f} {k['avg_tt']['unit']}",
+                                    help=k['avg_tt']['help'],
+                                )
+                                st.markdown(render_badge(k['avg_tt']['score']), unsafe_allow_html=True)
 
-                            # KPI 4: Buffer Index
-                            with col4:
-                                buffer_idx = ((p95_tt - med_tt) / med_tt * 100) if med_tt > 0 else 0.0
-                                rating, badge = get_performance_rating(max(0, 100 - buffer_idx))
-                                st.metric("📦 Buffer Index", f"{buffer_idx:.0f}%", help="(95th - Median) / Median")
-                                st.markdown(f'<span class="performance-badge {badge}">Lower is better</span>', unsafe_allow_html=True)
+                            with c4:
+                                st.metric(
+                                    "📈 Planning Time (95th)",
+                                    f"{k['planning_time']['value']:.1f} {k['planning_time']['unit']}",
+                                    help=k['planning_time']['help'],
+                                )
+                                st.markdown(render_badge(k['planning_time']['score']), unsafe_allow_html=True)
 
-                            # KPI 5: Peak Delay (context)
-                            with col5:
-                                worst_delay = float(np.nanmax(raw_data["average_delay"])) if raw_data["average_delay"].notna().any() else 0.0
-                                p95_delay = float(np.nanpercentile(raw_data["average_delay"].dropna(), 95)) if raw_data["average_delay"].notna().any() else 0.0
-                                rating, badge = get_performance_rating(100 - min(worst_delay / 2, 100))
-                                st.metric("🚨 Peak Delay", f"{worst_delay:.1f}s", delta=f"95th: {p95_delay:.1f}s")
-                                st.markdown(f'<span class="performance-badge {badge}">{rating}</span>', unsafe_allow_html=True)
+                            with c5:
+                                st.metric(
+                                    "🧭 Buffer Index",
+                                    f"{k['buffer_index']['value']:.1f}{k['buffer_index']['unit']}",
+                                    help=k['buffer_index']['help'],
+                                )
+                                st.markdown(render_badge(k['buffer_index']['score']), unsafe_allow_html=True)
 
                         if len(filtered_data) > 1:
                             st.subheader("📈 Performance Trends")
