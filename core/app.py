@@ -806,26 +806,33 @@ with tab2:
             st.warning("⚠️ Please select both start and end dates to proceed with the volume analysis.")
 
 # =========================
-# Footer (refined styling + updated tagline)
+# Footer (force white subtitle + copyright in dark mode)
 # =========================
 import streamlit.components.v1 as components
 
 footer_html = """
-<div style="text-align:center; padding: 1.25rem;
+<style>
+  /* Keep your existing look in light mode */
+  .footer-title { color:#2980b9; margin:0 0 .4rem; font-weight:700; }
+  .footer-sub   { opacity:.85; margin:.1rem 0 0; font-size:1.0rem; color:rgba(15,47,82,0.9); }
+  .footer-copy  { opacity:.75; margin:.2rem 0 0; font-size:.9rem;  color:rgba(15,47,82,0.8); }
+</style>
+
+<div id="adv-footer" style="text-align:center; padding: 1.25rem;
     background: linear-gradient(135deg, rgba(79,172,254,0.1), rgba(0,242,254,0.05));
     border-radius: 15px; margin-top: 1rem; border: 1px solid rgba(79,172,254,0.2);
     font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif;">
 
-  <h4 style="color:#2980b9; margin:0 0 .4rem; font-weight:700;">
+  <h4 class="footer-title">
     🛣️ Active Transportation & Operations Management Dashboard
   </h4>
-  <p style="opacity:.85; margin:.1rem 0 0; font-size:1.0rem;">
+
+  <p class="footer-sub">
     Powered by Advanced Machine Learning • Real-time Traffic Intelligence • Intelligent Transportation Solutions (ITS)
   </p>
 
-  <!-- Social and website row -->
   <div style="display:flex; justify-content:center; align-items:center; gap:14px; margin:12px 0 8px;">
-    <!-- Instagram (IG text badge for clarity/consistency) -->
+    <!-- IG (text badge) -->
     <a href="https://www.instagram.com/advantec98/" target="_blank" rel="noopener noreferrer" aria-label="Instagram"
        style="width:40px;height:40px;display:grid;place-items:center;border-radius:50%;
               background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08); text-decoration:none;
@@ -856,7 +863,7 @@ footer_html = """
       </svg>
     </a>
 
-    <!-- Website: clear pill button with label for clarity -->
+    <!-- Website -->
     <a href="https://advantec-usa.com/" target="_blank" rel="noopener noreferrer" aria-label="ADVANTEC Website"
        style="height:40px; display:inline-flex; align-items:center; gap:8px; padding:0 12px;
               border-radius:9999px; background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08);
@@ -867,19 +874,39 @@ footer_html = """
     </a>
   </div>
 
-  <p style="opacity:.65; margin:.2rem 0 0; font-size:.9rem;">
+  <p class="footer-copy">
     © 2025 ADVANTEC Consulting Engineers, Inc. — "Because We Care"
   </p>
 </div>
 
 <script>
-  // Subtle hover lift for all interactive items in the row
-  (function(){
-    const items = document.currentScript.previousElementSibling.querySelectorAll('a');
-    items.forEach(el => {
-      el.addEventListener('mouseenter', () => { el.style.transform = 'translateY(-1px)'; });
-      el.addEventListener('mouseleave', () => { el.style.transform = 'translateY(0)'; });
-    });
+  // Force subtitle and copyright to white when OS is in dark mode
+  (function() {
+    function applyDarkColors() {
+      var isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var sub = document.querySelector('#adv-footer .footer-sub');
+      var copy = document.querySelector('#adv-footer .footer-copy');
+      if (sub && copy) {
+        if (isDark) {
+          sub.style.color = '#ffffff';
+          copy.style.color = '#ffffff';
+          sub.style.opacity = '0.95';
+          copy.style.opacity = '0.85';
+        } else {
+          sub.style.color = 'rgba(15,47,82,0.9)';
+          copy.style.color = 'rgba(15,47,82,0.8)';
+          sub.style.opacity = '0.85';
+          copy.style.opacity = '0.75';
+        }
+      }
+    }
+    applyDarkColors();
+    // Update on theme changes
+    if (window.matchMedia) {
+      var mq = window.matchMedia('(prefers-color-scheme: dark)');
+      if (mq.addEventListener) mq.addEventListener('change', applyDarkColors);
+      else if (mq.addListener) mq.addListener(applyDarkColors);
+    }
   })();
 </script>
 """
