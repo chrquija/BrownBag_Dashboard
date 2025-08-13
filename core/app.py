@@ -806,46 +806,64 @@ with tab2:
             st.warning("⚠️ Please select both start and end dates to proceed with the volume analysis.")
 
 # =========================
-# Footer (force white subtitle + copyright in dark mode)
+# Footer (subtitle + copyright forced white in dark mode)
 # =========================
 import streamlit.components.v1 as components
 
 footer_html = """
 <style>
-  /* Keep your existing look in light mode */
+  /* Default (light mode) colors */
   .footer-title { color:#2980b9; margin:0 0 .4rem; font-weight:700; }
-  .footer-sub   { opacity:.85; margin:.1rem 0 0; font-size:1.0rem; color:rgba(15,47,82,0.9); }
-  .footer-copy  { opacity:.75; margin:.2rem 0 0; font-size:.9rem;  color:rgba(15,47,82,0.8); }
+  .footer-sub   { color: rgba(15,47,82,0.90); opacity:.85; margin:.1rem 0 0; font-size:1.0rem; }
+  .footer-copy  { color: rgba(15,47,82,0.80); opacity:.75; margin:.2rem 0 0; font-size:.9rem; }
+
+  /* Dark mode: force to white */
+  @media (prefers-color-scheme: dark) {
+    .footer-sub,
+    .footer-copy { color:#ffffff !important; opacity:.95 !important; }
+    .footer-title { color:#7ec3ff !important; }
+    /* Optional: slightly stronger border in dark */
+    .footer-card { border-color: rgba(79,172,254,0.35) !important; }
+  }
+
+  .social-btn {
+    width: 40px; height: 40px; display:grid; place-items:center; border-radius:50%;
+    background:#ffffff; border:1px solid rgba(41,128,185,.25);
+    box-shadow:0 2px 8px rgba(0,0,0,.08); text-decoration:none;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .social-btn:hover { transform: translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.12); }
+
+  .website-pill {
+    height:40px; display:inline-flex; align-items:center; gap:8px; padding:0 12px;
+    border-radius:9999px; background:#ffffff; border:1px solid #2980b9; color:#2980b9;
+    font-weight:700; text-decoration:none; box-shadow:0 2px 8px rgba(0,0,0,.08);
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .website-pill:hover { transform: translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.12); }
 </style>
 
-<div id="adv-footer" style="text-align:center; padding: 1.25rem;
+<div class="footer-card" style="text-align:center; padding: 1.25rem;
     background: linear-gradient(135deg, rgba(79,172,254,0.1), rgba(0,242,254,0.05));
     border-radius: 15px; margin-top: 1rem; border: 1px solid rgba(79,172,254,0.2);
     font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif;">
 
-  <h4 class="footer-title">
-    🛣️ Active Transportation & Operations Management Dashboard
-  </h4>
+  <h4 class="footer-title">🛣️ Active Transportation & Operations Management Dashboard</h4>
 
+  <!-- This will turn white in dark mode -->
   <p class="footer-sub">
     Powered by Advanced Machine Learning • Real-time Traffic Intelligence • Intelligent Transportation Solutions (ITS)
   </p>
 
   <div style="display:flex; justify-content:center; align-items:center; gap:14px; margin:12px 0 8px;">
     <!-- IG (text badge) -->
-    <a href="https://www.instagram.com/advantec98/" target="_blank" rel="noopener noreferrer" aria-label="Instagram"
-       style="width:40px;height:40px;display:grid;place-items:center;border-radius:50%;
-              background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08); text-decoration:none;
-              color:#444; border:1px solid rgba(41,128,185,.25); transition:transform .15s ease, box-shadow .15s ease;">
-      <span style="font:700 13px/1 system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial;">IG</span>
+    <a class="social-btn" href="https://www.instagram.com/advantec98/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+      <span style="font:700 13px/1 system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial; color:#444;">IG</span>
     </a>
 
     <!-- LinkedIn -->
-    <a href="https://www.linkedin.com/company/advantec-consulting-engineers-inc./posts/?feedView=all"
-       target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"
-       style="width:40px;height:40px;display:grid;place-items:center;border-radius:50%;
-              background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08); text-decoration:none;
-              border:1px solid rgba(41,128,185,.25); transition:transform .15s ease, box-shadow .15s ease;">
+    <a class="social-btn" href="https://www.linkedin.com/company/advantec-consulting-engineers-inc./posts/?feedView=all"
+       target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 448 512" aria-hidden="true" role="img">
         <path fill="#0A66C2"
               d="M100.28 448H7.4V148.9h92.88zM53.79 108.1C24.09 108.1 0 83.5 0 53.8 0 24.1 24.1 0 53.79 0s53.8 24.1 53.8 53.8c0 29.7-24.1 54.3-53.8 54.3zM447.9 448h-92.68V302.4c0-34.7-.7-79.3-48.3-79.3-48.3 0-55.7 37.7-55.7 76.6V448h-92.7V148.9h89V185h1.3c12.4-23.6 42.7-48.3 87.8-48.3 93.9 0 111.2 61.8 111.2 142.3V448z"/>
@@ -853,10 +871,7 @@ footer_html = """
     </a>
 
     <!-- Facebook -->
-    <a href="https://www.facebook.com/advantecconsultingUSA" target="_blank" rel="noopener noreferrer" aria-label="Facebook"
-       style="width:40px;height:40px;display:grid;place-items:center;border-radius:50%;
-              background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08); text-decoration:none;
-              border:1px solid rgba(41,128,185,.25); transition:transform .15s ease, box-shadow .15s ease;">
+    <a class="social-btn" href="https://www.facebook.com/advantecconsultingUSA" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 320 512" aria-hidden="true" role="img">
         <path fill="#1877F2"
               d="M279.14 288l14.22-92.66h-88.91v-60.13c0-25.35 12.42-50.06 52.24-50.06h40.42V6.26S263.61 0 225.36 0c-73.22 0-121 44.38-121 124.72v70.62H22.89V288h81.47v224h100.2V288z"/>
@@ -864,51 +879,15 @@ footer_html = """
     </a>
 
     <!-- Website -->
-    <a href="https://advantec-usa.com/" target="_blank" rel="noopener noreferrer" aria-label="ADVANTEC Website"
-       style="height:40px; display:inline-flex; align-items:center; gap:8px; padding:0 12px;
-              border-radius:9999px; background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08);
-              text-decoration:none; border:1px solid #2980b9; color:#2980b9; font-weight:700;
-              transition:transform .15s ease, box-shadow .15s ease;">
+    <a class="website-pill" href="https://advantec-usa.com/" target="_blank" rel="noopener noreferrer" aria-label="ADVANTEC Website">
       <span style="font-size:18px; line-height:1;">🌐</span>
       <span>Website</span>
     </a>
   </div>
 
-  <p class="footer-copy">
-    © 2025 ADVANTEC Consulting Engineers, Inc. — "Because We Care"
-  </p>
+  <!-- This will turn white in dark mode -->
+  <p class="footer-copy">© 2025 ADVANTEC Consulting Engineers, Inc. — "Because We Care"</p>
 </div>
-
-<script>
-  // Force subtitle and copyright to white when OS is in dark mode
-  (function() {
-    function applyDarkColors() {
-      var isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      var sub = document.querySelector('#adv-footer .footer-sub');
-      var copy = document.querySelector('#adv-footer .footer-copy');
-      if (sub && copy) {
-        if (isDark) {
-          sub.style.color = '#ffffff';
-          copy.style.color = '#ffffff';
-          sub.style.opacity = '0.95';
-          copy.style.opacity = '0.85';
-        } else {
-          sub.style.color = 'rgba(15,47,82,0.9)';
-          copy.style.color = 'rgba(15,47,82,0.8)';
-          sub.style.opacity = '0.85';
-          copy.style.opacity = '0.75';
-        }
-      }
-    }
-    applyDarkColors();
-    // Update on theme changes
-    if (window.matchMedia) {
-      var mq = window.matchMedia('(prefers-color-scheme: dark)');
-      if (mq.addEventListener) mq.addEventListener('change', applyDarkColors);
-      else if (mq.addListener) mq.addListener(applyDarkColors);
-    }
-  })();
-</script>
 """
 
 components.html(footer_html, height=200)
