@@ -99,6 +99,48 @@ st.markdown("""
 
 """, unsafe_allow_html=True)
 
+# Add these styles after your existing CSS block
+st.markdown("""
+<style>
+  /* Floating social buttons (top-left) */
+  .floating-social {
+      position: fixed;
+      top: 100px;          /* adjust if it overlaps the header */
+      left: 14px;
+      z-index: 99999;      /* keep above other UI */
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+  }
+  .floating-social a {
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      display: grid; place-items: center;
+      text-decoration: none;
+      box-shadow: 0 2px 10px rgba(0,0,0,.12);
+      font-weight: 800; letter-spacing: .5px;
+      color: #fff;
+      transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+      user-select: none;
+      border: 1px solid rgba(255,255,255,0.6);
+      background: #555; /* default safe background */
+  }
+  .floating-social a:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,.16); opacity: .95; }
+  .floating-social a:active { transform: translateY(0); box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+
+  /* Per‑network colors */
+  .floating-social .ig { background:#555; }     /* generic social (camera) */
+  .floating-social .li { background:#0A66C2; }  /* LinkedIn */
+  .floating-social .fb { background:#1877F2; }  /* Facebook */
+  .floating-social .web { background:#2980b9; } /* Website */
+
+  @media (max-width: 768px) {
+    .floating-social { top: 80px; left: 8px; }
+    .floating-social a { width: 36px; height: 36px; font-size: 0.95rem; }
+  }
+</style>
+""", unsafe_allow_html=True)
+
 # =========================
 # Title / Intro
 # =========================
@@ -811,46 +853,8 @@ with tab2:
 # =========================
 import streamlit.components.v1 as components
 
-# Floating social bar (fixed at top-left, high z-index)
+# Floating social HTML (uses the CSS styles above)
 st.markdown("""
-<style>
-  .floating-social {
-      position: fixed;
-      top: 100px;          /* adjust if it overlaps the header */
-      left: 14px;
-      z-index: 99999;      /* ensure it sits above other UI */
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-  }
-  .floating-social a {
-      width: 42px; height: 42px;
-      border-radius: 50%;
-      display: grid; place-items: center;
-      text-decoration: none;
-      box-shadow: 0 2px 10px rgba(0,0,0,.12);
-      font-weight: 800; letter-spacing: .5px;
-      color: #fff;
-      transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
-      user-select: none;
-      border: 1px solid rgba(255,255,255,0.6); /* subtle outline so it’s visible on light backgrounds */
-    }
-  .floating-social a:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,.16); opacity: .95; }
-  .floating-social a:active { transform: translateY(0); box-shadow: 0 2px 8px rgba(0,0,0,.12); }
-
-  /* Button colors */
-  .floating-social .ig { background:#555; }           /* generic social (camera) */
-  .floating-social .li { background:#0A66C2; }        /* LinkedIn */
-  .floating-social .fb { background:#1877F2; }        /* Facebook */
-  .floating-social .web { background:#2980b9; }       /* Website */
-
-  /* Responsive tweak */
-  @media (max-width: 768px) {
-    .floating-social { top: 80px; left: 8px; }
-    .floating-social a { width: 36px; height: 36px; font-size: 0.95rem; }
-  }
-</style>
-
 <div class="floating-social" role="navigation" aria-label="Social links">
   <a class="ig" href="https://www.instagram.com/advantec98/" target="_blank" rel="noopener noreferrer" title="Instagram (generic)">
     📸
@@ -867,7 +871,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Footer content (kept simple)
+# Footer content (simple, centered)
 footer_html = """
 <div style="text-align:center; padding: 1.25rem; background: linear-gradient(135deg, rgba(79,172,254,0.1), rgba(0,242,254,0.05));
     border-radius: 15px; margin-top: 1rem; border: 1px solid rgba(79,172,254,0.2); font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;">
