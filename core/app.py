@@ -820,7 +820,7 @@ footer_html = """
     🛣️ Active Transportation & Operations Management Dashboard
   </h4>
   <p style="opacity:.85; margin:.1rem 0 0; font-size:1.0rem;">
-    Powered by Advanced Machine Learning • Real-time Traffic Intelligence • Intelligent Transportation Solutions
+    Powered by Machine Learning • Real-time Traffic Intelligence • Intelligent Transportation Solutions
   </p>
 
   <!-- Social and website row -->
