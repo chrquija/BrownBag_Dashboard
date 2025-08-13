@@ -807,16 +807,14 @@ with tab2:
             st.warning("⚠️ Please select both start and end dates to proceed with the volume analysis.")
 
 # =========================
-# FOOTER (robust dark/light detection + no opacity tint)
+# FOOTER
 # =========================
-import streamlit as st
-
 FOOTER = """
 <style>
-  /* --- Light mode defaults (BLACK text) --- */
+  /* Light mode defaults */
   .footer-title { color:#2980b9; margin:0 0 .4rem; font-weight:700; }
-  .footer-sub   { color:#0f2f52; margin:.1rem 0 0; font-size:1.0rem; }   /* no opacity */
-  .footer-copy  { color:#0f2f52; margin:.2rem 0 0; font-size:.9rem; }    /* no opacity */
+  .footer-sub   { color: rgba(15,47,82,0.90); opacity:.90; margin:.1rem 0 0; font-size:1.0rem; }
+  .footer-copy  { color: rgba(15,47,82,0.85); opacity:.85; margin:.2rem 0 0; font-size:.9rem; }
 
   .social-btn {
     width: 40px; height: 40px; display:grid; place-items:center; border-radius:50%;
@@ -833,11 +831,24 @@ FOOTER = """
   }
   .website-pill:hover { transform: translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.12); }
 
-  /* --- Dark mode overrides (PURE WHITE text, no opacity) --- */
+  /* Dark mode (cover several Streamlit selectors) */
   html.dark .footer-sub,
-  html.dark .footer-copy { color:#ffffff !important; }
-  html.dark .footer-title { color:#7ec3ff !important; }
-  html.dark .footer-card { border-color: rgba(79,172,254,0.35) !important; }
+  html[data-theme="dark"] .footer-sub,
+  html[data-base-theme="dark"] .footer-sub,
+  body[data-theme="dark"] .footer-sub { color:#ffffff !important; opacity:.95 !important; }
+
+  html.dark .footer-copy,
+  html[data-theme="dark"] .footer-copy,
+  html[data-base-theme="dark"] .footer-copy,
+  body[data-theme="dark"] .footer-copy { color:#ffffff !important; opacity:.95 !important; }
+
+  html.dark .footer-title,
+  html[data-theme="dark"] .footer-title,
+  html[data-base-theme="dark"] .footer-title { color:#7ec3ff !important; }
+
+  html.dark .footer-card,
+  html[data-theme="dark"] .footer-card,
+  html[data-base-theme="dark"] .footer-card { border-color: rgba(79,172,254,0.35) !important; }
 </style>
 
 <div class="footer-card" style="text-align:center; padding: 1.25rem;
@@ -872,39 +883,21 @@ FOOTER = """
 </div>
 
 <script>
-/* Detect dark by reading actual theme colors, not attributes */
+/* Watch Streamlit theme attributes and toggle a .dark class on <html> */
 (function(){
-  const html = document.documentElement;
-
-  function luminance(rgb){
-    // expects "rgb(r, g, b)" or "rgba(r, g, b, a)"
-    const m = rgb.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/i);
-    if(!m) return 1;
-    const [r,g,b] = [m[1],m[2],m[3]].map(Number).map(v=>{
-      v/=255; return v<=0.03928? v/12.92 : Math.pow((v+0.055)/1.055, 2.4);
-    });
-    return 0.2126*r + 0.7152*g + 0.0722*b;
-  }
-
-  function setMode(){
-    // Try Streamlit CSS vars first, fallback to body bg color
-    const root = getComputedStyle(document.documentElement);
-    let bg = root.getPropertyValue('--background-color').trim();
-    if(!bg) bg = getComputedStyle(document.body).backgroundColor;
-    const isDark = luminance(bg) < 0.5;
-    html.classList.toggle('dark', isDark);
-  }
-
-  // Initial + watch for theme changes
-  setMode();
-  const obs = new MutationObserver(setMode);
-  obs.observe(document.documentElement, {attributes:true, attributeFilter:['style','data-theme','data-base-theme']});
-  obs.observe(document.body, {attributes:true, attributeFilter:['style','data-theme']});
-  // Periodic safety re-check (in case Streamlit swaps stylesheets)
-  setInterval(setMode, 1000);
+  const el = document.documentElement;
+  const setDark = () => {
+    const isDark =
+      el.getAttribute('data-theme') === 'dark' ||
+      el.getAttribute('data-base-theme') === 'dark' ||
+      document.body.getAttribute('data-theme') === 'dark';
+    el.classList.toggle('dark', !!isDark);
+  };
+  new MutationObserver(setDark).observe(el, { attributes: true, attributeFilter: ['data-theme','data-base-theme'] });
+  setDark();
 })();
 </script>
 """
 
+# Render inside the main DOM, not an iframe
 st.markdown(FOOTER, unsafe_allow_html=True)
-
