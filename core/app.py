@@ -844,13 +844,14 @@ footer_html = """
             </svg>
         </a>
 
-        <!-- Website (clear pill button with label) -->
-<a href="https://advantec-usa.com/" target="_blank" rel="noopener noreferrer" aria-label="ADVANTEC Website"
-   style="height:40px; display:inline-flex; align-items:center; gap:8px; padding:0 12px;
-          border-radius:9999px; background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08);
-          text-decoration:none; border:1px solid #2980b9; color:#2980b9; font-weight:700;">
-  <span style="font-size:18px; line-height:1;">🌐</span>
-</a>
+        <!-- Website -->
+        <a href="https://advantec-usa.com/" target="_blank" rel="noopener noreferrer" aria-label="ADVANTEC Website"
+           style="width:40px;height:40px;display:grid;place-items:center;border-radius:50%;
+                  background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08); text-decoration:none;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 496 512" aria-hidden="true" role="img">
+                <path fill="#2980b9" d="M248 8C111 8 0 119 0 256s111 248 248 248 248-111 248-248S385 8 248 8Zm0 448c-110.3 0-200-89.7-200-200S137.7 56 248 56s200 89.7 200 200-89.7 200-200 200Zm0-344a144 144 0 1 0 144 144A144.16 144.16 0 0 0 248 112Zm0 256a112 112 0 1 1 112-112 112.13 112.13 0 0 1-112 112Zm24-192h-48a8 8 0 0 0-8 8v80a8 8 0 0 0 8 8h80a8 8 0 0 0 8-8v-48a8 8 0 0 0-8-8h-32Z"/>
+            </svg>
+        </a>
     </div>
 
     <p style="opacity:0.6; margin-top: 0.1rem; font-size: 0.9rem;">© 2025 ADVANTEC Platform - Optimizing Transportation Networks</p>
