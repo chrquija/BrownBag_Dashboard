@@ -266,7 +266,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
             "Avg Volume (vph)": st.column_config.NumberColumn("Avg Volume (vph)", format="%d"),
             # Renamed header as requested (display label only)
             "CVAG Recommendation": st.column_config.TextColumn("Cycle Length Recommendation For CVAG", width="medium"),
-            "Cycle Length Status": st.column_config.TextColumn("Status", width="medium"),
+            "Status": st.column_config.TextColumn("Status", width="medium"),
         },
     )
 
