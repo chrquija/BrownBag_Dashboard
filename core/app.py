@@ -23,7 +23,7 @@ from sidebar_functions import (
     volume_charts,
     date_range_preset_controls,
     compute_perf_kpis_interpretable,
-    render_badge,
+    render_badge
 )
 
 # Cycle length section (moved out)
@@ -143,24 +143,17 @@ st.markdown("""
 # =========================
 tab1, tab2 = st.tabs(["1️⃣ ITERIS CLEARGUIDE DATA", "2️⃣ KINETIC MOBILITY DATA"])
 
-# ---------------------------------
-# Sidebar containers for each tab
-# We render both, then toggle visibility via tiny JS based on the active tab.
-# ---------------------------------
-with st.sidebar:
-    st.markdown('<div id="sb-perf">', unsafe_allow_html=True)
-
 # -------------------------
 # TAB 1: Performance / Travel Time
 # -------------------------
 with tab1:
     st.header("*🚧 Analyzing Speed, Delay, and Travel Time*")
 
-    # Progress + load
     progress_bar = st.progress(0)
     status_text = st.empty()
     status_text.text("Loading corridor performance data...")
     progress_bar.progress(25)
+
     corridor_df = get_corridor_df()
     progress_bar.progress(100)
 
@@ -172,15 +165,13 @@ with tab1:
         progress_bar.empty()
         status_text.empty()
 
-        # Sidebar controls for Tab 1 (inside sb-perf container)
         with st.sidebar:
-            with st.expander("🚧 Performance Analysis Controls", expanded=True):
+            with st.expander("🚧 Performance Analysis Controls", expanded=False):
                 seg_options = ["All Segments"] + sorted(corridor_df["segment_name"].dropna().unique().tolist())
                 corridor = st.selectbox(
                     "🛣️ Select Corridor Segment",
                     seg_options,
                     help="Choose a specific segment or analyze all segments",
-                    key="corridor_perf",
                 )
 
                 min_date = corridor_df["local_datetime"].dt.date.min()
@@ -194,7 +185,7 @@ with tab1:
                     "Data Aggregation",
                     ["Hourly", "Daily", "Weekly", "Monthly"],
                     index=0,
-                    key="granularity_perf",
+                    key="granularity_perf",  # 👈 unique key for Tab 1
                     help="Higher aggregation smooths trends but may hide peaks",
                 )
 
@@ -219,7 +210,6 @@ with tab1:
                         with c2:
                             end_hour = st.number_input("End Hour (1–24)", 1, 24, 18, step=1, key="end_hour_perf")
 
-        # Main content for Tab 1
         if len(date_range) == 2:
             try:
                 base_df = corridor_df.copy()
@@ -269,7 +259,9 @@ with tab1:
                                 if col in raw_data:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
 
-                            # KPIs
+                            # After coercing numeric types, replace the old col1..col5 KPI block with this:
+
+                            # --- Five KPI row (interpretable + badges) ---
                             k = compute_perf_kpis_interpretable(raw_data, HIGH_DELAY_SEC)
 
                             c1, c2, c3, c4, c5 = st.columns(5)
@@ -452,16 +444,11 @@ with tab1:
                                 )
                             except Exception as e:
                                 st.error(f"❌ Error in performance analysis: {e}")
+
             except Exception as e:
                 st.error(f"❌ Error processing traffic data: {e}")
         else:
             st.warning("⚠️ Please select both start and end dates to proceed.")
-
-# ---------------------------------
-# Close Tab 1 container and open Tab 2 container in the sidebar
-# ---------------------------------
-with st.sidebar:
-    st.markdown('</div><div id="sb-vol" style="display:none;">', unsafe_allow_html=True)
 
 # -------------------------
 # TAB 2: Volume / Capacity
@@ -469,11 +456,11 @@ with st.sidebar:
 with tab2:
     st.header("📊 Advanced Traffic Demand & Capacity Analysis")
 
-    # Progress + load
     progress_bar = st.progress(0)
     status_text = st.empty()
     status_text.text("Loading traffic demand data...")
     progress_bar.progress(25)
+
     volume_df = get_volume_df()
     progress_bar.progress(100)
 
@@ -485,9 +472,8 @@ with tab2:
         progress_bar.empty()
         status_text.empty()
 
-        # Sidebar controls for Tab 2 (inside sb-vol container)
         with st.sidebar:
-            with st.expander("📊 Volume Analysis Controls", expanded=True):
+            with st.expander("📊 Volume Analysis Controls", expanded=False):
                 intersections = ["All Intersections"] + sorted(
                     volume_df["intersection_name"].dropna().unique().tolist()
                 )
@@ -504,13 +490,12 @@ with tab2:
                     "Data Aggregation",
                     ["Hourly", "Daily", "Weekly", "Monthly"],
                     index=0,
-                    key="granularity_vol",
+                    key="granularity_vol",  # 👈 unique key for Tab 2
                 )
 
                 direction_options = ["All Directions"] + sorted(volume_df["direction"].dropna().unique().tolist())
                 direction_filter = st.selectbox("🔄 Direction Filter", direction_options, key="direction_filter_vol")
 
-        # Main content for Tab 2
         if len(date_range_vol) == 2:
             try:
                 base_df = volume_df.copy()
@@ -780,7 +765,7 @@ with tab2:
                             ).reset_index().sort_values("Peak", ascending=False)
                             st.dataframe(simple, use_container_width=True)
 
-                        # Cycle Length Recommendations section
+                        # Cycle Length Recommendations section (moved to separate module)
                         render_cycle_length_section(raw)
 
             except Exception as e:
@@ -788,49 +773,6 @@ with tab2:
                 st.info("Please check your data sources and try again.")
         else:
             st.warning("⚠️ Please select both start and end dates to proceed with the volume analysis.")
-
-# ---------------------------------
-# Close Tab 2 sidebar container and add JS to toggle based on active tab
-# ---------------------------------
-with st.sidebar:
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# Toggle sidebar control visibility to match the selected tab
-st.markdown("""
-<script>
-(function() {
-  function syncSidebarToActiveTab() {
-    const tabs = document.querySelectorAll('button[role="tab"]');
-    if (!tabs || tabs.length === 0) return;
-
-    let activeIndex = 0;
-    tabs.forEach((t, i) => {
-      if (t.getAttribute('aria-selected') === 'true') activeIndex = i;
-    });
-
-    const perf = document.getElementById('sb-perf');
-    const vol  = document.getElementById('sb-vol');
-    if (!perf || !vol) return;
-
-    if (activeIndex === 0) {
-      perf.style.display = 'block';
-      vol.style.display  = 'none';
-    } else {
-      perf.style.display = 'none';
-      vol.style.display  = 'block';
-    }
-  }
-
-  // Observe tab selection changes
-  const observer = new MutationObserver(syncSidebarToActiveTab);
-  observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['aria-selected'] });
-
-  // Run on load and shortly after initial render
-  window.addEventListener('load', syncSidebarToActiveTab);
-  setTimeout(syncSidebarToActiveTab, 300);
-})();
-</script>
-""", unsafe_allow_html=True)
 
 # =========================
 # FOOTER (force subtitle + copyright to white in dark mode)
