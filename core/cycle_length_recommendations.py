@@ -3,7 +3,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import textwrap
 
 
 # -------------------------
@@ -124,7 +123,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         st.info("No hourly volume data available for cycle length recommendations.")
         return
 
-    # ---- Context values for header ----
+    # ---- Context subtitle directly under the section title ----
     raw = raw.copy()
     raw["local_datetime"] = pd.to_datetime(raw["local_datetime"], errors="coerce")
 
@@ -149,80 +148,82 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     else:
         direction_label = "N/A"
 
-    # ---- Header (dedented HTML to avoid markdown code block rendering) ----
-    header_html = textwrap.dedent(f"""
-    <div style="
-        background: linear-gradient(135deg, #2b77e5 0%, #19c3e6 100%);
-        border-radius: 16px;
-        padding: 22px 24px 20px;
-        color: #fff;
-        box-shadow: 0 10px 26px rgba(25, 115, 210, .25);
-        margin: 8px 0 16px;
-        text-align: left;
-    ">
-      <div style="display:flex; align-items:center; gap:12px;">
+    # Clean, left-aligned, high-contrast header with larger title + context chips
+    st.markdown(
+        f"""
         <div style="
-            width:40px; height:40px; border-radius:10px;
-            background: rgba(255,255,255,.18);
-            display:flex; align-items:center; justify-content:center;
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,.15);
+            background: linear-gradient(135deg, #2b77e5 0%, #19c3e6 100%);
+            border-radius: 16px;
+            padding: 22px 24px 20px;
+            color: #fff;
+            box-shadow: 0 10px 26px rgba(25, 115, 210, .25);
+            margin: 8px 0 16px;
+            text-align: left;
         ">
-          <span style="font-size:20px;">🔁</span>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="
+                width:40px; height:40px; border-radius:10px;
+                background: rgba(255,255,255,.18);
+                display:flex; align-items:center; justify-content:center;
+                box-shadow: inset 0 0 0 1px rgba(255,255,255,.15);
+            ">
+              <span style="font-size:20px;">🔁</span>
+            </div>
+            <div style="font-size:2.1rem; font-weight:800; letter-spacing:.2px; line-height:1.1;">
+              Cycle Length Recommendations
+            </div>
+          </div>
+
+          <div style="display:flex; flex-wrap:wrap; gap:8px 10px; margin:12px 0 6px;">
+            <span style="
+                display:inline-flex; align-items:center; gap:6px;
+                padding:6px 10px; border-radius:999px;
+                background: rgba(255,255,255,.16);
+                font-weight:700; font-size:0.95rem;
+                box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
+            ">
+              <span style="opacity:.9;">Intersection:</span>
+              <span style="opacity:1;">{intersection_label}</span>
+            </span>
+
+            <span style="
+                display:inline-flex; align-items:center; gap:6px;
+                padding:6px 10px; border-radius:999px;
+                background: rgba(255,255,255,.16);
+                font-weight:700; font-size:0.95rem;
+                box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
+            ">
+              <span style="opacity:.9;">Direction:</span>
+              <span style="opacity:1;">{direction_label}</span>
+            </span>
+
+            <span style="
+                display:inline-flex; align-items:center; gap:6px;
+                padding:6px 10px; border-radius:999px;
+                background: rgba(255,255,255,.16);
+                font-weight:700; font-size:0.95rem;
+                box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
+            ">
+              <span style="opacity:.9;">Study Type:</span>
+              <span style="opacity:1;">Hourly Analysis</span>
+            </span>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-top:2px;">
+            <span style="
+                width:24px; height:24px; border-radius:8px;
+                background: rgba(255,255,255,.18);
+                display:inline-flex; align-items:center; justify-content:center;
+                font-size:13px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.16);
+            ">📅</span>
+            <span style="font-size:1.05rem; font-weight:600; opacity:.95;">
+              {start_label} — {end_label}
+            </span>
+          </div>
         </div>
-        <div style="font-size:2.1rem; font-weight:800; letter-spacing:.2px; line-height:1.1;">
-          Cycle Length Recommendations
-        </div>
-      </div>
-
-      <div style="display:flex; flex-wrap:wrap; gap:8px 10px; margin:12px 0 6px;">
-        <span style="
-            display:inline-flex; align-items:center; gap:6px;
-            padding:6px 10px; border-radius:999px;
-            background: rgba(255,255,255,.16);
-            font-weight:700; font-size:0.95rem;
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
-        ">
-          <span style="opacity:.9;">Intersection:</span>
-          <span style="opacity:1;">{intersection_label}</span>
-        </span>
-
-        <span style="
-            display:inline-flex; align-items:center; gap:6px;
-            padding:6px 10px; border-radius:999px;
-            background: rgba(255,255,255,.16);
-            font-weight:700; font-size:0.95rem;
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
-        ">
-          <span style="opacity:.9;">Direction:</span>
-          <span style="opacity:1;">{direction_label}</span>
-        </span>
-
-        <span style="
-            display:inline-flex; align-items:center; gap:6px;
-            padding:6px 10px; border-radius:999px;
-            background: rgba(255,255,255,.16);
-            font-weight:700; font-size:0.95rem;
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
-        ">
-          <span style="opacity:.9;">Study Type:</span>
-          <span style="opacity:1;">Hourly Analysis</span>
-        </span>
-      </div>
-
-      <div style="display:flex; align-items:center; gap:8px; margin-top:2px;">
-        <span style="
-            width:24px; height:24px; border-radius:8px;
-            background: rgba(255,255,255,.18);
-            display:inline-flex; align-items:center; justify-content:center;
-            font-size:13px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.16);
-        ">📅</span>
-        <span style="font-size:1.05rem; font-weight:600; opacity:.95;">
-          {start_label} — {end_label}
-        </span>
-      </div>
-    </div>
-    """)
-    st.markdown(header_html, unsafe_allow_html=True)
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Controls
     c1, c2 = st.columns([2, 1.6])
@@ -274,7 +275,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     optimal_hours = int((hourly["Status"] == "🟢 OPTIMAL").sum())
     changes_needed = total_hours - optimal_hours
 
-    # Lists of hours needing changes (not displayed under KPI)
+    # Lists of hours needing changes (not displayed under the KPI per request)
     inc_hours_list = hourly.loc[hourly["Status"] == "⬆️ INCREASE", "Hour"].tolist()
     red_hours_list = hourly.loc[hourly["Status"] == "🔽 REDUCE", "Hour"].tolist()
 
@@ -310,7 +311,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         system_eff = (optimal_hours / total_hours * 100) if total_hours else 0
         st.metric("✅ Optimal Hours", optimal_hours, delta=f"{system_eff:.0f}% efficiency")
     with k3:
-        # Keep counts only (no hour lists here)
+        # Keep counts only (no hour lists under this KPI)
         st.metric("🔧 Changes Needed", changes_needed, delta=f"↑ {len(inc_hours_list)} • ↓ {len(red_hours_list)}")
     with k4:
         st.metric("⚠️ Hours Above High-Volume Threshold", f"{high_hours}", delta=f"{high_share:.1f}% of time")
