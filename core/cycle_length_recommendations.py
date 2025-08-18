@@ -118,7 +118,7 @@ def _sec_value(label: str) -> int:
 # -------------------------
 def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") -> None:
     """Render the enhanced Cycle Length Recommendations section."""
-    st.subheader("🔁 Cycle Length Recommendations — Hourly Analysis")
+    st.subheader("🔁 Cycle Length Recommendations for CVAG — Hourly Analysis")
 
     if raw.empty:
         st.info("No hourly volume data available for cycle length recommendations.")
