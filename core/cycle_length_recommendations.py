@@ -248,8 +248,6 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     with k3:
         # Keep Changes Needed but include which hours need increase/reduce
         st.metric("🔧 Changes Needed", changes_needed, delta=f"↑ {len(inc_hours_list)} • ↓ {len(red_hours_list)}")
-        st.caption(f"↑ {_hours_preview(inc_hours_list)}")
-        st.caption(f"↓ {_hours_preview(red_hours_list)}")
     with k4:
         # Replace Avg Volume with Hours Above High-Volume Threshold (and share of time)
         st.metric("⚠️ Hours Above High-Volume Threshold", f"{high_hours}", delta=f"{high_share:.1f}% of time")
