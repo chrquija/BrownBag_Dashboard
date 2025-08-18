@@ -22,6 +22,7 @@ def filter_by_period(df: pd.DataFrame, time_col: str, period: str) -> pd.DataFra
         return df_copy[(df_copy[time_col].dt.hour >= 16) & (df_copy[time_col].dt.hour <= 20)]
     return df_copy
 
+
 # -------------------------
 # Cycle length thresholds
 # -------------------------
@@ -43,6 +44,7 @@ def get_hourly_cycle_length(volume):
         return "110 sec"
     return "Free mode"
 
+
 def _get_status(recommended: str, current: str) -> str:
     """Compare recommended cycle vs current and return status label."""
     if recommended == current:
@@ -59,6 +61,7 @@ def _get_status(recommended: str, current: str) -> str:
         return "🔽 REDUCE"
     return "🟢 OPTIMAL"
 
+
 # -------------------------
 # Visual helpers
 # -------------------------
@@ -72,8 +75,53 @@ CYCLE_COLORS = {
 }
 STATUS_COLORS = {"🟢 OPTIMAL": "#2ecc71", "⬆️ INCREASE": "#e67e22", "🔽 REDUCE": "#8e44ad"}
 
+# --- KPI card CSS (scoped to this section) ---
+CYCLE_KPI_CSS = """
+<style>
+/* wrap the KPI row so we can target only these cards */
+.cycle-kpi-grid [data-testid="column"]{
+  background: linear-gradient(135deg, rgba(79,172,254,.08), rgba(0,242,254,.06));
+  border: 1px solid rgba(79,172,254,.25);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin: 6px 6px 10px 6px;
+  box-shadow: 0 6px 20px rgba(79,172,254,.12);
+}
+
+/* make the metric and its text pop a bit */
+.cycle-kpi-grid [data-testid="stMetricLabel"],
+.cycle-kpi-grid [data-testid="stMetricValue"],
+.cycle-kpi-grid [data-testid="stMetricDelta"]{
+  color: #0d2b4f !important;
+}
+
+/* captions inside the card */
+.cycle-kpi-grid [data-testid="stCaptionContainer"]{
+  color: rgba(0,0,0,.65) !important;
+  margin-top: .25rem;
+}
+
+/* dark mode overrides */
+html[data-theme="dark"] .cycle-kpi-grid [data-testid="column"]{
+  background: rgba(7,18,38,.65);
+  border: 1px solid rgba(126,195,255,.22);
+  box-shadow: inset 0 0 0 1px rgba(126,195,255,.06), 0 12px 28px rgba(0,0,0,.45);
+}
+
+html[data-theme="dark"] .cycle-kpi-grid [data-testid="stMetricLabel"],
+html[data-theme="dark"] .cycle-kpi-grid [data-testid="stMetricValue"],
+html[data-theme="dark"] .cycle-kpi-grid [data-testid="stMetricDelta"]{
+  color: #eaf2ff !important;
+}
+
+html[data-theme="dark"] .cycle-kpi-grid [data-testid="stCaptionContainer"]{
+  color: rgba(255,255,255,.88) !important;
+}
+</style>
+"""
+
 def _legend_html() -> str:
-    """HTML legend for cycle length thresholds (now wrapped with classes for dark-mode fix)."""
+    """HTML legend for cycle length thresholds (kept dark-mode friendly by title class)."""
     return (
         '<div class="cycle-legend" '
         'style="border:1px solid rgba(79,172,254,.25);padding:.6rem 1rem;border-radius:12px;'
@@ -103,17 +151,21 @@ def _sec_value(label: str) -> int:
     """Map label to numeric seconds for sorting/plotting."""
     return int(label.split()[0]) if label != "Free mode" else 0
 
+
 # -------------------------
 # Main renderer
 # -------------------------
 def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") -> None:
-    """Render the enhanced Cycle Length Recommendations section."""
+    """Render the enhanced Cycle Length Recommendations section with boxed KPIs."""
     if raw is None or raw.empty:
         st.info("No hourly volume data available for cycle length recommendations.")
         return
     if "local_datetime" not in raw.columns or "total_volume" not in raw.columns:
         st.info("Required columns not found: 'local_datetime', 'total_volume'.")
         return
+
+    # inject CSS for KPI cards (scoped)
+    st.markdown(CYCLE_KPI_CSS, unsafe_allow_html=True)
 
     # ---- Context values for header ----
     raw = raw.copy()
@@ -140,7 +192,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     else:
         direction_label = "N/A"
 
-    # ---- Header (compact, no leading spaces) ----
+    # ---- Header ----
     header_html = (
         '<div style="background: linear-gradient(135deg, #2b77e5 0%, #19c3e6 100%); border-radius: 16px; '
         'padding: 22px 24px 20px; color: #fff; box-shadow: 0 10px 26px rgba(25,115,210,.25); '
@@ -194,12 +246,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         )
 
     # Time period filtering
-    period_map = {
-        "AM (05:00-10:00)": "AM",
-        "MD (11:00-15:00)": "MD",
-        "PM (16:00-20:00)": "PM",
-        "All Day": "ALL",
-    }
+    period_map = {"AM (05:00-10:00)": "AM", "MD (11:00-15:00)": "MD", "PM (16:00-20:00)": "PM", "All Day": "ALL"}
     selected_period = period_map[time_period]
     period_data = raw if selected_period == "ALL" else filter_by_period(raw, "local_datetime", selected_period)
     if period_data.empty:
@@ -226,11 +273,9 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     optimal_hours = int((hourly["Status"] == "🟢 OPTIMAL").sum())
     changes_needed = total_hours - optimal_hours
 
-    # Lists of hours needing changes
     inc_hours_list = hourly.loc[hourly["Status"] == "⬆️ INCREASE", "Hour"].tolist()
     red_hours_list = hourly.loc[hourly["Status"] == "🔽 REDUCE", "Hour"].tolist()
 
-    # High-volume threshold KPI (based on raw rows in selected period)
     HIGH_VOLUME_THRESHOLD_VPH = 1200
     period_data["total_volume"] = pd.to_numeric(period_data["total_volume"], errors="coerce")
     total_rows = int(period_data["total_volume"].count())
@@ -238,11 +283,9 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     high_hours = int(len(high_rows)) if total_rows > 0 else 0
     high_share = (high_hours / total_rows * 100) if total_rows > 0 else 0.0
 
-    # Unique hour-of-day labels that exceeded threshold
     exceed_hour_ids = sorted(high_rows["local_datetime"].dt.hour.unique().tolist()) if len(high_rows) else []
     exceed_hour_labels = [f"{h:02d}:00" for h in exceed_hour_ids]
 
-    # Peak capacity utilization
     INTERSECTION_CAPACITY_VPH = 1800
     peak_volume_pd = float(period_data["total_volume"].max()) if total_rows > 0 else 0.0
     peak_capacity_util = (peak_volume_pd / INTERSECTION_CAPACITY_VPH * 100) if INTERSECTION_CAPACITY_VPH else 0.0
@@ -254,7 +297,11 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         tail = "" if len(lst) <= max_items else f" (+{len(lst)-max_items} more)"
         return ", ".join(lst[:max_items]) + tail
 
-    # KPIs row
+    # ---------------------------
+    # BOXED KPI ROW (wrapper + 5 cards)
+    # ---------------------------
+    st.markdown('<div class="cycle-kpi-grid">', unsafe_allow_html=True)
+
     k1, k2, k3, k4, k5 = st.columns(5)
     with k1:
         st.metric("📅 Hours Analyzed", total_hours, delta=hours_window_str)
@@ -271,11 +318,12 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         st.metric("🚦 Peak Capacity Utilization", f"{peak_capacity_util:.0f}%", delta=f"Peak {peak_volume_pd:,.0f} vph")
         st.caption(f"Intersection Capacity: {INTERSECTION_CAPACITY_VPH:,} vph")
 
+    st.markdown('</div>', unsafe_allow_html=True)  # close .cycle-kpi-grid
+
     # Charts row
     ch1, ch2 = st.columns([2.2, 1.8])
 
     with ch1:
-        # Volume by hour colored by recommended cycle
         fig = px.bar(
             hourly.sort_values("hour"),
             x="Hour",
@@ -286,7 +334,6 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
             title="Hourly Volume with Recommended Cycle Length",
             labels={"Volume": "Avg Volume (vph)", "Hour": "Hour of Day"},
         )
-        # Overlay markers for status
         fig.add_trace(
             go.Scatter(
                 x=hourly["Hour"],
@@ -311,7 +358,6 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         st.plotly_chart(fig, use_container_width=True)
 
     with ch2:
-        # Pie: Hours by Status
         status_counts = hourly["Status"].value_counts().reindex(["🟢 OPTIMAL", "⬆️ INCREASE", "🔽 REDUCE"], fill_value=0)
         pie = px.pie(
             names=status_counts.index,
@@ -338,7 +384,9 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         use_container_width=True,
         column_config={
             "Hour": st.column_config.TextColumn("Hour", width="small"),
-            "Avg Volume (vph)": st.column_config.NumberColumn("Total Vehicle Volume (Throughs, lefts, and rights)", format="%d"),
+            "Avg Volume (vph)": st.column_config.NumberColumn(
+                "Total Vehicle Volume (Throughs, lefts, and rights)", format="%d"
+            ),
             "CVAG Recommendation": st.column_config.TextColumn("Cycle Length Recommendation For CVAG", width="medium"),
             "Status": st.column_config.TextColumn("Cycle Length Status", width="medium"),
         },
