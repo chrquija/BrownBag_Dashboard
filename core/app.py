@@ -147,7 +147,38 @@ tab1, tab2 = st.tabs(["1️⃣ ITERIS CLEARGUIDE", "2️⃣ KINETIC MOBILITY"])
 # TAB 1: Performance / Travel Time
 # -------------------------
 with tab1:
-    st.header("🚧 Corridor Performance Analysis")
+    # Gradient title, pill chips (like your CVAG header style)
+    st.markdown(
+        """
+        <div style="
+            background: linear-gradient(135deg, #2b77e5 0%, #19c3e6 100%);
+            border-radius:16px; padding:18px 20px; color:#fff; margin:8px 0 14px;
+            box-shadow:0 10px 26px rgba(25,115,210,.25); text-align:left;
+            font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.18);
+                        display:flex;align-items:center;justify-content:center;
+                        box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);">🚧</div>
+            <div style="font-size:1.9rem;font-weight:800;letter-spacing:.2px;">
+              Corridor Performance — Speed, Delay & Travel Time
+            </div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px 10px;margin:10px 0 4px;">
+            <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;
+                         background:rgba(255,255,255,.16);font-weight:700;font-size:.92rem;
+                         box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);">
+              <span style="opacity:.9;">Data Source:</span><span>Iteris ClearGuide</span>
+            </span>
+            <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;
+                         background:rgba(255,255,255,.16);font-weight:700;font-size:.92rem;
+                         box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);">
+              <span style="opacity:.9;">Variables:</span><span>Speed • Delay • Travel Time</span>
+            </span>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -186,7 +217,7 @@ with tab1:
                     "Data Aggregation",
                     ["Hourly", "Daily", "Weekly", "Monthly"],
                     index=0,
-                    key="granularity_perf",  # 👈 unique key for Tab 1
+                    key="granularity_perf",
                     help="Higher aggregation smooths trends but may hide peaks",
                 )
 
@@ -259,8 +290,6 @@ with tab1:
                             for col in ["average_delay", "average_traveltime", "average_speed"]:
                                 if col in raw_data:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
-
-                            # After coercing numeric types, replace the old col1..col5 KPI block with this:
 
                             # --- Five KPI row (interpretable + badges) ---
                             k = compute_perf_kpis_interpretable(raw_data, HIGH_DELAY_SEC)
@@ -455,7 +484,38 @@ with tab1:
 # TAB 2: Volume / Capacity
 # -------------------------
 with tab2:
-    st.header("📊 Advanced Traffic Demand & Capacity Analysis")
+    # Gradient title, pill chips (like your CVAG header style)
+    st.markdown(
+        f"""
+        <div style="
+            background: linear-gradient(135deg, #2b77e5 0%, #19c3e6 100%);
+            border-radius:16px; padding:18px 20px; color:#fff; margin:8px 0 14px;
+            box-shadow:0 10px 26px rgba(25,115,210,.25); text-align:left;
+            font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.18);
+                        display:flex;align-items:center;justify-content:center;
+                        box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);">📊</div>
+            <div style="font-size:1.9rem;font-weight:800;letter-spacing:.2px;">
+              Intersection Demand & Capacity — Vehicle Volume
+            </div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px 10px;margin:10px 0 4px;">
+            <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;
+                         background:rgba(255,255,255,.16);font-weight:700;font-size:.92rem;
+                         box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);">
+              <span style="opacity:.9;">Data Source:</span><span>Kinetic Mobility</span>
+            </span>
+            <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;
+                         background:rgba(255,255,255,.16);font-weight:700;font-size:.92rem;
+                         box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);">
+              <span style="opacity:.9;">Variables:</span><span>Vehicle Volume</span>
+            </span>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -493,7 +553,7 @@ with tab2:
                     "Data Aggregation",
                     ["Hourly", "Daily", "Weekly", "Monthly"],
                     index=0,
-                    key="granularity_vol",  # 👈 unique key for Tab 2
+                    key="granularity_vol",
                 )
 
                 direction_options = ["All Directions"] + sorted(volume_df["direction"].dropna().unique().tolist())
