@@ -345,7 +345,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         use_container_width=True,
         column_config={
             "Hour": st.column_config.TextColumn("Hour", width="small"),
-            "Avg Volume (vph)": st.column_config.NumberColumn("Avg Volume (vph)", format="%d"),
+            "Avg Volume (vph)": st.column_config.NumberColumn("Total Vehicle Volume (Throughs, lefts, and rights)", format="%d"),
             "CVAG Recommendation": st.column_config.TextColumn("Cycle Length Recommendation For CVAG", width="medium"),
             "Status": st.column_config.TextColumn("Cycle Length Status", width="medium"),
         },
