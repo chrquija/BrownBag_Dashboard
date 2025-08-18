@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import time
 import streamlit.components.v1 as components
 
-# Plotly (figures are created in helpers; keeping imports is harmless)
+# Plotly
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -23,10 +23,10 @@ from sidebar_functions import (
     volume_charts,
     date_range_preset_controls,
     compute_perf_kpis_interpretable,
-    render_badge
+    render_badge,
 )
 
-# Cycle length section (moved out)
+# Cycle length section (separate module)
 from cycle_length_recommendations import render_cycle_length_section
 
 # =========================
@@ -48,7 +48,7 @@ CRITICAL_DELAY_SEC = 120
 HIGH_DELAY_SEC = 60
 
 # =========================
-# CSS
+# Base CSS
 # =========================
 st.markdown("""
 <style>
@@ -101,6 +101,23 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# --- App-wide dark mode contrast fixes (titles, values, captions, legend header) ---
+st.markdown("""
+<style id="dark-contrast-fix">
+html[data-theme="dark"] [data-testid="stMetricLabel"],
+html[data-theme="dark"] [data-testid="stMetricValue"],
+html[data-theme="dark"] [data-testid="stMetricDelta"]{
+  color: #eaf2ff !important;
+}
+html[data-theme="dark"] [data-testid="stCaptionContainer"]{
+  color: rgba(255,255,255,.88) !important;
+}
+html[data-theme="dark"] .cycle-legend .legend-title{
+  color: #cfe8ff !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # =========================
 # Title / Intro
 # =========================
@@ -147,7 +164,7 @@ tab1, tab2 = st.tabs(["1️⃣ ITERIS CLEARGUIDE", "2️⃣ KINETIC MOBILITY"])
 # TAB 1: Performance / Travel Time
 # -------------------------
 with tab1:
-    st.header("*🚧 Corridor Performance Analysis*")
+    st.header("*🚧 Analyzing Speed, Delay, and Travel Time*")
 
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -167,7 +184,6 @@ with tab1:
 
         with st.sidebar:
             with st.expander("TAB 1️⃣ Controls", expanded=False):
-                st.caption("Analysis Variables: Speed, Delay, and Travel Time")
                 seg_options = ["All Segments"] + sorted(corridor_df["segment_name"].dropna().unique().tolist())
                 corridor = st.selectbox(
                     "🛣️ Select Corridor Segment",
@@ -186,7 +202,7 @@ with tab1:
                     "Data Aggregation",
                     ["Hourly", "Daily", "Weekly", "Monthly"],
                     index=0,
-                    key="granularity_perf",  # 👈 unique key for Tab 1
+                    key="granularity_perf",  # unique key for Tab 1
                     help="Higher aggregation smooths trends but may hide peaks",
                 )
 
@@ -259,8 +275,6 @@ with tab1:
                             for col in ["average_delay", "average_traveltime", "average_speed"]:
                                 if col in raw_data:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
-
-                            # After coercing numeric types, replace the old col1..col5 KPI block with this:
 
                             # --- Five KPI row (interpretable + badges) ---
                             k = compute_perf_kpis_interpretable(raw_data, HIGH_DELAY_SEC)
@@ -475,11 +489,9 @@ with tab2:
 
         with st.sidebar:
             with st.expander("TAB 2️⃣ CONTROLS", expanded=False):
-                st.caption("Analysis Variables: Vehicle Volume")
                 intersections = ["All Intersections"] + sorted(
                     volume_df["intersection_name"].dropna().unique().tolist()
                 )
-
                 intersection = st.selectbox("🚦 Select Intersection", intersections, key="intersection_vol")
 
                 min_date = volume_df["local_datetime"].dt.date.min()
@@ -493,7 +505,7 @@ with tab2:
                     "Data Aggregation",
                     ["Hourly", "Daily", "Weekly", "Monthly"],
                     index=0,
-                    key="granularity_vol",  # 👈 unique key for Tab 2
+                    key="granularity_vol",  # unique key for Tab 2
                 )
 
                 direction_options = ["All Directions"] + sorted(volume_df["direction"].dropna().unique().tolist())
@@ -768,7 +780,7 @@ with tab2:
                             ).reset_index().sort_values("Peak", ascending=False)
                             st.dataframe(simple, use_container_width=True)
 
-                        # Cycle Length Recommendations section (moved to separate module)
+                        # Cycle Length Recommendations section
                         render_cycle_length_section(raw)
 
             except Exception as e:
@@ -778,11 +790,10 @@ with tab2:
             st.warning("⚠️ Please select both start and end dates to proceed with the volume analysis.")
 
 # =========================
-# FOOTER (force subtitle + copyright to white in dark mode)
+# FOOTER
 # =========================
 FOOTER = """
 <style>
-  /* Light mode defaults */
   .footer-title { color:#2980b9; margin:0 0 .4rem; font-weight:700; }
 
   .social-btn {
@@ -809,7 +820,6 @@ FOOTER = """
 
   <h4 class="footer-title">🛣️ Active Transportation & Operations Management Dashboard</h4>
 
-  <!-- These will turn white in dark mode via JavaScript -->
   <p class="footer-sub" style="margin:.1rem 0 0; font-size:1.0rem; color:#0f2f52;">
     Powered by Advanced Machine Learning • Real-time Traffic Intelligence • Intelligent Transportation Solutions (ITS)
   </p>
@@ -831,7 +841,6 @@ FOOTER = """
     </a>
   </div>
 
-  <!-- This will turn white in dark mode via JavaScript -->
   <p class="footer-copy" style="margin:.2rem 0 0; font-size:.9rem; color:#0f2f52;">
     © 2025 ADVANTEC Consulting Engineers, Inc. — "Because We Care"
   </p>
@@ -870,16 +879,12 @@ FOOTER = """
       }
     }
   }
-
   updateFooterColors();
-
   const observer = new MutationObserver(updateFooterColors);
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
   observer.observe(document.body, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
-
   setInterval(updateFooterColors, 1000);
 })();
 </script>
 """
-
 st.markdown(FOOTER, unsafe_allow_html=True)

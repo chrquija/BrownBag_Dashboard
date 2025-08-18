@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-
 # -------------------------
 # Time-period filter (AM/MD/PM/ALL)
 # -------------------------
@@ -22,7 +21,6 @@ def filter_by_period(df: pd.DataFrame, time_col: str, period: str) -> pd.DataFra
     if period == "PM":
         return df_copy[(df_copy[time_col].dt.hour >= 16) & (df_copy[time_col].dt.hour <= 20)]
     return df_copy
-
 
 # -------------------------
 # Cycle length thresholds
@@ -45,7 +43,6 @@ def get_hourly_cycle_length(volume):
         return "110 sec"
     return "Free mode"
 
-
 def _get_status(recommended: str, current: str) -> str:
     """Compare recommended cycle vs current and return status label."""
     if recommended == current:
@@ -62,9 +59,8 @@ def _get_status(recommended: str, current: str) -> str:
         return "🔽 REDUCE"
     return "🟢 OPTIMAL"
 
-
 # -------------------------
-# Visual helpers (legend + colors)
+# Visual helpers
 # -------------------------
 CYCLE_ORDER = ["Free mode", "110 sec", "120 sec", "130 sec", "140 sec"]
 CYCLE_COLORS = {
@@ -76,14 +72,15 @@ CYCLE_COLORS = {
 }
 STATUS_COLORS = {"🟢 OPTIMAL": "#2ecc71", "⬆️ INCREASE": "#e67e22", "🔽 REDUCE": "#8e44ad"}
 
-
 def _legend_html() -> str:
-    """HTML legend for cycle length thresholds."""
+    """HTML legend for cycle length thresholds (now wrapped with classes for dark-mode fix)."""
     return (
-        '<div style="border:1px solid rgba(79,172,254,.25);padding:.6rem 1rem;border-radius:12px;'
+        '<div class="cycle-legend" '
+        'style="border:1px solid rgba(79,172,254,.25);padding:.6rem 1rem;border-radius:12px;'
         'background:linear-gradient(135deg, rgba(79,172,254,.08), rgba(0,242,254,.06));'
         'box-shadow:0 8px 24px rgba(79,172,254,.08);margin-top:.25rem;">'
-        '<div style="font-weight:700;margin-bottom:.35rem;color:#1e3c72;">Cycle Length Thresholds</div>'
+        '<div class="legend-title" style="font-weight:700;margin-bottom:.35rem;color:#1e3c72;">'
+        'Cycle Length Thresholds</div>'
         '<span style="display:inline-flex;align-items:center;margin:.25rem .5rem;padding:.3rem .6rem;'
         'border-radius:999px;background:#e74c3c;color:#fff;font-weight:600;font-size:.85rem;">140 sec</span>'
         '<span style="margin-right:1rem;opacity:.85;font-size:.9rem">≥ 2400 vph</span>'
@@ -102,134 +99,15 @@ def _legend_html() -> str:
         '</div>'
     )
 
-
 def _sec_value(label: str) -> int:
     """Map label to numeric seconds for sorting/plotting."""
     return int(label.split()[0]) if label != "Free mode" else 0
-
-
-# -------------------------
-# KPI cards (boxed, theme-aware)
-# -------------------------
-def _inject_kpi_css():
-    st.markdown(
-        """
-<style>
-/* Light defaults */
-:root {
-  --kpi-bg: linear-gradient(135deg, rgba(79,172,254,.06), rgba(0,242,254,.04));
-  --kpi-border: rgba(79,172,254,.28);
-  --kpi-text: #0f2f52;
-  --kpi-muted: rgba(15,47,82,.78);
-  --kpi-shadow: 0 8px 20px rgba(79,172,254,.10);
-  --kpi-good: #2ecc71;
-  --kpi-warn: #f39c12;
-  --kpi-bad: #e74c3c;
-  --kpi-pill: rgba(255,255,255,.65);
-}
-
-/* Dark themes Streamlit uses */
-html.dark, [data-theme="dark"], [data-base-theme="dark"], body[data-theme="dark"] {
-  --kpi-bg: rgba(255,255,255,.06);
-  --kpi-border: rgba(126,195,255,.30);
-  --kpi-text: #ffffff;
-  --kpi-muted: rgba(255,255,255,.85);
-  --kpi-shadow: 0 10px 26px rgba(0,0,0,.35);
-  --kpi-pill: rgba(255,255,255,.10);
-}
-
-.cvag-kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
-  margin: 4px 0 10px;
-}
-@media (max-width: 1500px) {
-  .cvag-kpi-grid { grid-template-columns: repeat(3, 1fr); }
-}
-@media (max-width: 900px) {
-  .cvag-kpi-grid { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 600px) {
-  .cvag-kpi-grid { grid-template-columns: 1fr; }
-}
-
-.cvag-kpi-card {
-  border-radius: 16px;
-  padding: 14px 16px;
-  background: var(--kpi-bg);
-  border: 1px solid var(--kpi-border);
-  box-shadow: var(--kpi-shadow);
-  color: var(--kpi-text);
-}
-
-.cvag-kpi-title {
-  font-weight: 700;
-  font-size: .95rem;
-  letter-spacing: .2px;
-  display: flex; align-items: center; gap: .5rem;
-  opacity: .95;
-}
-
-.cvag-kpi-value {
-  font-size: 2.0rem;
-  line-height: 1.05;
-  font-weight: 800;
-  margin-top: .25rem;
-  letter-spacing: .3px;
-}
-
-.cvag-kpi-delta {
-  margin-top: .15rem;
-  font-size: .95rem;
-  font-weight: 600;
-  opacity: .95;
-}
-.cvag-kpi-delta.good  { color: var(--kpi-good); }
-.cvag-kpi-delta.warn  { color: var(--kpi-warn); }
-.cvag-kpi-delta.bad   { color: var(--kpi-bad); }
-.cvag-kpi-delta.neutral { color: var(--kpi-muted); }
-
-.cvag-kpi-foot {
-  margin-top: .35rem;
-  font-size: .85rem;
-  color: var(--kpi-muted);
-}
-
-.cvag-pill {
-  display:inline-flex; align-items:center; gap:.4rem;
-  padding:.25rem .55rem; border-radius: 999px;
-  background: var(--kpi-pill);
-  font-weight: 700; font-size: .82rem;
-}
-</style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def _kpi_card(title: str, value_html: str, delta_text: str, tone: str = "neutral",
-              foot1: str | None = None, foot2: str | None = None) -> str:
-    """Return a single KPI card's HTML."""
-    tone = tone if tone in {"good", "warn", "bad", "neutral"} else "neutral"
-    foot1_html = f'<div class="cvag-kpi-foot">{foot1}</div>' if foot1 else ""
-    foot2_html = f'<div class="cvag-kpi-foot">{foot2}</div>' if foot2 else ""
-    return f"""
-    <div class="cvag-kpi-card">
-      <div class="cvag-kpi-title">{title}</div>
-      <div class="cvag-kpi-value">{value_html}</div>
-      <div class="cvag-kpi-delta {tone}">{delta_text}</div>
-      {foot1_html}{foot2_html}
-    </div>
-    """
-
 
 # -------------------------
 # Main renderer
 # -------------------------
 def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") -> None:
     """Render the enhanced Cycle Length Recommendations section."""
-
     if raw is None or raw.empty:
         st.info("No hourly volume data available for cycle length recommendations.")
         return
@@ -262,7 +140,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     else:
         direction_label = "N/A"
 
-    # ---- Header ----
+    # ---- Header (compact, no leading spaces) ----
     header_html = (
         '<div style="background: linear-gradient(135deg, #2b77e5 0%, #19c3e6 100%); border-radius: 16px; '
         'padding: 22px 24px 20px; color: #fff; box-shadow: 0 10px 26px rgba(25,115,210,.25); '
@@ -316,7 +194,12 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         )
 
     # Time period filtering
-    period_map = {"AM (05:00-10:00)": "AM", "MD (11:00-15:00)": "MD", "PM (16:00-20:00)": "PM", "All Day": "ALL"}
+    period_map = {
+        "AM (05:00-10:00)": "AM",
+        "MD (11:00-15:00)": "MD",
+        "PM (16:00-20:00)": "PM",
+        "All Day": "ALL",
+    }
     selected_period = period_map[time_period]
     period_data = raw if selected_period == "ALL" else filter_by_period(raw, "local_datetime", selected_period)
     if period_data.empty:
@@ -330,7 +213,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     # Hourly aggregation
     period_data["hour"] = period_data["local_datetime"].dt.hour
     hourly = period_data.groupby("hour", as_index=False)["total_volume"].mean()
-    hourly["Volume"] = hourly["total_volume"].fillna(0).round().astype(int)
+    hourly["Volume"] = hourly["total_volume"].round(0).astype(int)
 
     # Recommendations + Status
     hourly["CVAG Recommendation"] = hourly["Volume"].apply(get_hourly_cycle_length)
@@ -343,7 +226,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     optimal_hours = int((hourly["Status"] == "🟢 OPTIMAL").sum())
     changes_needed = total_hours - optimal_hours
 
-    # Lists of hours needing changes (for display)
+    # Lists of hours needing changes
     inc_hours_list = hourly.loc[hourly["Status"] == "⬆️ INCREASE", "Hour"].tolist()
     red_hours_list = hourly.loc[hourly["Status"] == "🔽 REDUCE", "Hour"].tolist()
 
@@ -371,34 +254,26 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         tail = "" if len(lst) <= max_items else f" (+{len(lst)-max_items} more)"
         return ", ".join(lst[:max_items]) + tail
 
-    # -------------------------
-    # BOXED KPIs (card grid)
-    # -------------------------
-    _inject_kpi_css()
-
-    # Tones for quick visual meaning
-    system_eff = (optimal_hours / total_hours * 100) if total_hours else 0
-    tone_eff = "good" if system_eff >= 80 else ("warn" if system_eff >= 60 else "bad")
-    tone_changes = "good" if changes_needed == 0 else ("warn" if changes_needed <= (total_hours * 0.4) else "bad")
-    tone_high = "bad" if high_share > 25 else ("warn" if high_share > 10 else "good")
-    tone_util = "bad" if peak_capacity_util > 90 else ("warn" if peak_capacity_util > 75 else "good")
-
-    cards_html = f"""
-    <div class="cvag-kpi-grid">
-      {_kpi_card("📅 Hours Analyzed", f"{total_hours}", hours_window_str, "neutral")}
-      {_kpi_card("✅ Optimal Hours", f"{optimal_hours}", f"{system_eff:.0f}% efficiency", tone_eff)}
-      {_kpi_card("🔧 Changes Needed", f"{changes_needed}", f"↑ {len(inc_hours_list)} • ↓ {len(red_hours_list)}", tone_changes)}
-      {_kpi_card("⚠️ Hours Above High-Volume Threshold", f"{high_hours}", f"{high_share:.1f}% of time",
-                 tone_high, foot1=f"Threshold: > {HIGH_VOLUME_THRESHOLD_VPH:,} vph",
-                 foot2=f"Hours: {_hours_preview(exceed_hour_labels)}")}
-      {_kpi_card("🚦 Peak Capacity Utilization", f"{peak_capacity_util:.0f}%", f"Peak {int(peak_volume_pd):,} vph",
-                 tone_util, foot1=f"Capacity: {INTERSECTION_CAPACITY_VPH:,} vph")}
-    </div>
-    """
-    st.markdown(cards_html, unsafe_allow_html=True)
+    # KPIs row
+    k1, k2, k3, k4, k5 = st.columns(5)
+    with k1:
+        st.metric("📅 Hours Analyzed", total_hours, delta=hours_window_str)
+    with k2:
+        system_eff = (optimal_hours / total_hours * 100) if total_hours else 0
+        st.metric("✅ Optimal Hours", optimal_hours, delta=f"{system_eff:.0f}% efficiency")
+    with k3:
+        st.metric("🔧 Changes Needed", changes_needed, delta=f"↑ {len(inc_hours_list)} • ↓ {len(red_hours_list)}")
+    with k4:
+        st.metric("⚠️ Hours Above High-Volume Threshold", f"{high_hours}", delta=f"{high_share:.1f}% of time")
+        st.caption(f"Threshold: > {HIGH_VOLUME_THRESHOLD_VPH:,} vph")
+        st.caption(f"Hours: {_hours_preview(exceed_hour_labels)}")
+    with k5:
+        st.metric("🚦 Peak Capacity Utilization", f"{peak_capacity_util:.0f}%", delta=f"Peak {peak_volume_pd:,.0f} vph")
+        st.caption(f"Intersection Capacity: {INTERSECTION_CAPACITY_VPH:,} vph")
 
     # Charts row
     ch1, ch2 = st.columns([2.2, 1.8])
+
     with ch1:
         # Volume by hour colored by recommended cycle
         fig = px.bar(
@@ -463,20 +338,17 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         use_container_width=True,
         column_config={
             "Hour": st.column_config.TextColumn("Hour", width="small"),
-            "Avg Volume (vph)": st.column_config.NumberColumn(
-                "Total Vehicle Volume (Throughs, lefts, and rights)", format="%d"
-            ),
+            "Avg Volume (vph)": st.column_config.NumberColumn("Total Vehicle Volume (Throughs, lefts, and rights)", format="%d"),
             "CVAG Recommendation": st.column_config.TextColumn("Cycle Length Recommendation For CVAG", width="medium"),
             "Status": st.column_config.TextColumn("Cycle Length Status", width="medium"),
         },
     )
 
     # Insights + download
-    if len(hourly):
-        peak_volume = int(hourly["Volume"].max())
-        peak_hour = hourly.loc[hourly["Volume"].idxmax(), "Hour"]
-    else:
-        peak_volume, peak_hour = 0, "—"
+    inc_hours = int((hourly["Status"] == "⬆️ INCREASE").sum())
+    red_hours = int((hourly["Status"] == "🔽 REDUCE").sum())
+    peak_volume = int(hourly["Volume"].max())
+    peak_hour = hourly.loc[hourly["Volume"].idxmax(), "Hour"]
 
     st.markdown(
         f"""
@@ -484,7 +356,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
             <h4>💡 Cycle Length Optimization Insights</h4>
             <p><strong>📊 System Efficiency:</strong> {optimal_hours}/{total_hours} hours optimal ({(optimal_hours/total_hours*100 if total_hours else 0):.0f}%)</p>
             <p><strong>📈 Volume Profile:</strong> Peak {peak_volume:,} vph at {peak_hour} • Threshold exceedance: {high_hours} hours ({high_share:.1f}% of time)</p>
-            <p><strong>🔧 Actions:</strong> ↑ {int((hourly["Status"] == "⬆️ INCREASE").sum())} hours need longer cycles • ↓ {int((hourly["Status"] == "🔽 REDUCE").sum())} hours need shorter cycles</p>
+            <p><strong>🔧 Actions:</strong> ↑ {inc_hours} hours need longer cycles • ↓ {red_hours} hours need shorter cycles</p>
             <p><strong>🚦 Capacity:</strong> Peak utilization {peak_capacity_util:.0f}% of intersection capacity ({INTERSECTION_CAPACITY_VPH:,} vph)</p>
         </div>
         """,
