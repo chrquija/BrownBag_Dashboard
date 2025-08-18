@@ -149,15 +149,27 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     else:
         direction_label = "N/A"
 
-    # Title + subtitle block
+    # Title + subtitle block (bigger, clearer)
     st.markdown(
         f"""
-        <div class="context-header" style="margin-top:.5rem;">
-            <h2>🔁 Cycle Length Recommendations for CVAG — Hourly Analysis</h2>
-            <p><strong>Intersection:</strong> {intersection_label} • <strong>Direction:</strong> {direction_label}</p>
-            <p><strong>Date Range:</strong> {start_label} — {end_label}</p>
-        </div>
-        """,
+            <div class="context-header" style="margin-top:.6rem; padding:2.2rem 2rem;">
+                <div style="
+                    font-size:2.6rem; font-weight:900; line-height:1.18;
+                    letter-spacing:.2px; display:flex; align-items:center; gap:.65rem;">
+                    <span>🔁</span>
+                    <span>Cycle Length Recommendations</span>
+                </div>
+                <div style="font-size:1.25rem; font-weight:600; opacity:.98; margin-top:.35rem;">
+                    Hourly Analysis
+                </div>
+                <div style="margin-top:1.0rem; font-size:1.1rem; font-weight:600;">
+                    <span>Intersection:</span> {intersection_label} • <span>Direction:</span> {direction_label}
+                </div>
+                <div style="font-size:1.05rem; opacity:.95; margin-top:.25rem;">
+                    <span>Date Range:</span> {start_label} — {end_label}
+                </div>
+            </div>
+            """,
         unsafe_allow_html=True,
     )
 
