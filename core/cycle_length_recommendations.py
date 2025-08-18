@@ -124,7 +124,6 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         return
 
     # ---- Context subtitle directly under the section title ----
-    # Build: Intersection • Direction • Date range with day names
     raw = raw.copy()
     raw["local_datetime"] = pd.to_datetime(raw["local_datetime"], errors="coerce")
 
@@ -149,7 +148,6 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     else:
         direction_label = "N/A"
 
-    # Title + subtitle block
     st.markdown(
         f"""
         <div class="context-header" style="margin-top:.5rem;">
@@ -174,7 +172,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     with c2:
         current_cycle = st.selectbox(
             "⚙️ Current System Cycle",
-            CYCLE_ORDER[::-1],  # show bigger first: 140, 130, 120, 110, Free
+            CYCLE_ORDER[::-1],  # 140, 130, 120, 110, Free
             index=0,
             help="Cycle used currently; compared against recommendations",
             key=f"{key_prefix}_current",
@@ -184,12 +182,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     st.markdown(_legend_html(), unsafe_allow_html=True)
 
     # Time period filtering
-    period_map = {
-        "AM (05:00-10:00)": "AM",
-        "MD (11:00-15:00)": "MD",
-        "PM (16:00-20:00)": "PM",
-        "All Day": "ALL",
-    }
+    period_map = {"AM (05:00-10:00)": "AM", "MD (11:00-15:00)": "MD", "PM (16:00-20:00)": "PM", "All Day": "ALL"}
     selected_period = period_map[time_period]
     period_data = raw if selected_period == "ALL" else filter_by_period(raw, "local_datetime", selected_period)
     if period_data.empty:
@@ -211,53 +204,69 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     hourly["Hour"] = hourly["hour"].apply(lambda x: f"{x:02d}:00")
     hourly["Rec (sec)"] = hourly["CVAG Recommendation"].apply(_sec_value)
 
-    # --- KPI calculations (updated) ---
+    # --- KPI calculations ---
     total_hours = len(hourly)
     optimal_hours = int((hourly["Status"] == "🟢 OPTIMAL").sum())
     changes_needed = total_hours - optimal_hours
+
+    # Lists of hours needing changes
     inc_hours_list = hourly.loc[hourly["Status"] == "⬆️ INCREASE", "Hour"].tolist()
     red_hours_list = hourly.loc[hourly["Status"] == "🔽 REDUCE", "Hour"].tolist()
 
-    # Hours above high-volume threshold (share of time) computed from raw rows in the selected time period
-    HIGH_VOLUME_THRESHOLD_VPH = 1200  # default; align with your constants if you expose controls
+    # High-volume threshold KPI (based on raw rows in selected period)
+    HIGH_VOLUME_THRESHOLD_VPH = 1200
     period_data["total_volume"] = pd.to_numeric(period_data["total_volume"], errors="coerce")
     total_rows = int(period_data["total_volume"].count())
-    high_hours = int((period_data["total_volume"] > HIGH_VOLUME_THRESHOLD_VPH).sum()) if total_rows > 0 else 0
+    high_rows = period_data.loc[period_data["total_volume"] > HIGH_VOLUME_THRESHOLD_VPH]
+    high_hours = int(len(high_rows)) if total_rows > 0 else 0
     high_share = (high_hours / total_rows * 100) if total_rows > 0 else 0.0
 
-    # Peak capacity utilization (% of theoretical capacity)
-    THEORETICAL_LINK_CAPACITY_VPH = 1800  # default; align with your constants if desired
-    peak_volume_pd = float(period_data["total_volume"].max()) if total_rows > 0 else 0.0
-    peak_capacity_util = (peak_volume_pd / THEORETICAL_LINK_CAPACITY_VPH * 100) if THEORETICAL_LINK_CAPACITY_VPH else 0.0
+    # List the hours (hour-of-day) where threshold was exceeded (unique hour labels)
+    exceed_hour_ids = sorted(high_rows["local_datetime"].dt.hour.unique().tolist()) if len(high_rows) else []
+    exceed_hour_labels = [f"{h:02d}:00" for h in exceed_hour_ids]
 
-    # Helper to compactly show lists of hours
+    # Peak capacity utilization
+    INTERSECTION_CAPACITY_VPH = 1800
+    peak_volume_pd = float(period_data["total_volume"].max()) if total_rows > 0 else 0.0
+    peak_capacity_util = (peak_volume_pd / INTERSECTION_CAPACITY_VPH * 100) if INTERSECTION_CAPACITY_VPH else 0.0
+
+    # Helper to summarize lists
     def _hours_preview(lst, max_items=5):
         if not lst:
             return "None"
         tail = "" if len(lst) <= max_items else f" (+{len(lst)-max_items} more)"
         return ", ".join(lst[:max_items]) + tail
 
+    # KPIs row
     k1, k2, k3, k4, k5 = st.columns(5)
     with k1:
-        # Keep Hours Analyzed, specify the hour window you’re analyzing
         st.metric("📅 Hours Analyzed", total_hours, delta=hours_window_str)
     with k2:
-        # Keep Optimal Hours as-is; show efficiency in delta
         system_eff = (optimal_hours / total_hours * 100) if total_hours else 0
         st.metric("✅ Optimal Hours", optimal_hours, delta=f"{system_eff:.0f}% efficiency")
     with k3:
-        # Keep Changes Needed but include which hours need increase/reduce
+        # Remove the detailed hour lists here (as requested)
         st.metric("🔧 Changes Needed", changes_needed, delta=f"↑ {len(inc_hours_list)} • ↓ {len(red_hours_list)}")
-        st.caption(f"↑ {_hours_preview(inc_hours_list)}")
-        st.caption(f"↓ {_hours_preview(red_hours_list)}")
     with k4:
-        # Replace Avg Volume with Hours Above High-Volume Threshold (and share of time)
         st.metric("⚠️ Hours Above High-Volume Threshold", f"{high_hours}", delta=f"{high_share:.1f}% of time")
         st.caption(f"Threshold: > {HIGH_VOLUME_THRESHOLD_VPH:,} vph")
+        # Show which hours exceed the threshold
+        st.caption(f"Hours: {_hours_preview(exceed_hour_labels, max_items=8)}")
     with k5:
-        # Peak Capacity Utilization (% of theoretical capacity)
         st.metric("🚦 Peak Capacity Utilization", f"{peak_capacity_util:.0f}%", delta=f"Peak {peak_volume_pd:,.0f} vph")
-        st.caption(f"Theoretical capacity: {THEORETICAL_LINK_CAPACITY_VPH:,} vph")
+        st.caption(f"Intersection Capacity: {INTERSECTION_CAPACITY_VPH:,} vph")
+
+    # Quick plain-language explanations
+    st.markdown(
+        """
+        <div class="insight-box">
+          <h4>ℹ️ KPI Definitions (Plain English)</h4>
+          <p><strong>Hours Above High-Volume Threshold:</strong> Count of individual hourly records in your current selection where volume exceeded the threshold. The percent is that count divided by all hourly records in the selection.</p>
+          <p><strong>Peak Capacity Utilization:</strong> We find the single highest hourly volume in your selection, then compare it to the intersection’s capacity. Example: if the peak hour is 1,635 vph and the capacity is 1,800 vph, utilization is 1,635 / 1,800 ≈ 91%.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Charts row
     ch1, ch2 = st.columns([2.2, 1.8])
@@ -299,7 +308,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         st.plotly_chart(fig, use_container_width=True)
 
     with ch2:
-        # Change Hours by Status to a pie chart
+        # Pie: Hours by Status
         status_counts = hourly["Status"].value_counts().reindex(["🟢 OPTIMAL", "⬆️ INCREASE", "🔽 REDUCE"], fill_value=0)
         pie = px.pie(
             names=status_counts.index,
@@ -345,7 +354,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
             <p><strong>📊 System Efficiency:</strong> {optimal_hours}/{total_hours} hours optimal ({(optimal_hours/total_hours*100 if total_hours else 0):.0f}%)</p>
             <p><strong>📈 Volume Profile:</strong> Peak {peak_volume:,} vph at {peak_hour} • Threshold exceedance: {high_hours} hours ({high_share:.1f}% of time)</p>
             <p><strong>🔧 Actions:</strong> ↑ {inc_hours} hours need longer cycles • ↓ {red_hours} hours need shorter cycles</p>
-            <p><strong>🚦 Capacity:</strong> Peak utilization {peak_capacity_util:.0f}% of theoretical ({THEORETICAL_LINK_CAPACITY_VPH:,} vph)</p>
+            <p><strong>🚦 Capacity:</strong> Peak utilization {peak_capacity_util:.0f}% of intersection capacity ({INTERSECTION_CAPACITY_VPH:,} vph)</p>
         </div>
         """,
         unsafe_allow_html=True,
