@@ -204,7 +204,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
             color="CVAG Recommendation",
             color_discrete_map=CYCLE_COLORS,
             category_orders={"CVAG Recommendation": CYCLE_ORDER, "Hour": [f"{h:02d}:00" for h in range(24)]},
-            title="Hourly Volume with Recommended Cycle Length for CVAG",
+            title="Hourly Volume with Recommended Cycle Length",
             labels={"Volume": "Avg Volume (vph)", "Hour": "Hour of Day"},
         )
         # Overlay markers for status
