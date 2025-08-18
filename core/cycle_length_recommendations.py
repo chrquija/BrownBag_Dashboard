@@ -1,35 +1,32 @@
-# Python
+# cycle_length_recommendations.py
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import textwrap
 
 
 # -------------------------
-# Time-period filter (keeps your AM/MD/PM thresholds)
+# Time-period filter (AM/MD/PM/ALL)
 # -------------------------
 @st.cache_data
 def filter_by_period(df: pd.DataFrame, time_col: str, period: str) -> pd.DataFrame:
     """Filter dataframe by time period (AM 05–10, MD 11–15, PM 16–20, ALL)."""
-    if time_col not in df.columns:
+    if time_col not in df.columns or df.empty:
         return df
-
     df_copy = df.copy()
     df_copy[time_col] = pd.to_datetime(df_copy[time_col], errors="coerce")
 
     if period == "AM":
         return df_copy[(df_copy[time_col].dt.hour >= 5) & (df_copy[time_col].dt.hour <= 10)]
-    elif period == "MD":
+    if period == "MD":
         return df_copy[(df_copy[time_col].dt.hour >= 11) & (df_copy[time_col].dt.hour <= 15)]
-    elif period == "PM":
+    if period == "PM":
         return df_copy[(df_copy[time_col].dt.hour >= 16) & (df_copy[time_col].dt.hour <= 20)]
-    else:
-        return df_copy
+    return df_copy
 
 
 # -------------------------
-# Cycle length thresholds (keeps your cycle thresholds)
+# Cycle length thresholds
 # -------------------------
 @st.cache_data
 def get_hourly_cycle_length(volume):
@@ -39,16 +36,15 @@ def get_hourly_cycle_length(volume):
     """
     if pd.isna(volume) or volume <= 0:
         return "Free mode"
-    elif volume >= 2400:
+    if volume >= 2400:
         return "140 sec"
-    elif volume >= 1500:
+    if volume >= 1500:
         return "130 sec"
-    elif volume >= 600:
+    if volume >= 600:
         return "120 sec"
-    elif volume >= 300:
+    if volume >= 300:
         return "110 sec"
-    else:
-        return "Free mode"
+    return "Free mode"
 
 
 def _get_status(recommended: str, current: str) -> str:
@@ -59,7 +55,6 @@ def _get_status(recommended: str, current: str) -> str:
         return "🔽 REDUCE"
     if recommended != "Free mode" and current == "Free mode":
         return "⬆️ INCREASE"
-
     rec_val = int(recommended.split()[0]) if recommended != "Free mode" else 0
     cur_val = int(current.split()[0]) if current != "Free mode" else 0
     if rec_val > cur_val:
@@ -85,27 +80,27 @@ STATUS_COLORS = {"🟢 OPTIMAL": "#2ecc71", "⬆️ INCREASE": "#e67e22", "🔽 
 
 def _legend_html() -> str:
     """HTML legend for cycle length thresholds."""
-    chips = []
-    items = [
-        ("140 sec", "≥ 2400 vph", CYCLE_COLORS["140 sec"]),
-        ("130 sec", "≥ 1500 vph", CYCLE_COLORS["130 sec"]),
-        ("120 sec", "≥ 600 vph", CYCLE_COLORS["120 sec"]),
-        ("110 sec", "≥ 300 vph", CYCLE_COLORS["110 sec"]),
-        ("Free mode", "< 300 vph", CYCLE_COLORS["Free mode"]),
-    ]
-    for label, cond, color in items:
-        chips.append(
-            f'<span style="display:inline-flex;align-items:center;margin:.25rem .5rem;padding:.3rem .6rem;'
-            f'border-radius:999px;background:{color};color:#fff;font-weight:600;font-size:.85rem;">'
-            f'{label}</span><span style="margin-right:1rem;opacity:.85;font-size:.9rem">{cond}</span>'
-        )
     return (
         '<div style="border:1px solid rgba(79,172,254,.25);padding:.6rem 1rem;border-radius:12px;'
         'background:linear-gradient(135deg, rgba(79,172,254,.08), rgba(0,242,254,.06));'
         'box-shadow:0 8px 24px rgba(79,172,254,.08);margin-top:.25rem;">'
         '<div style="font-weight:700;margin-bottom:.35rem;color:#1e3c72;">Cycle Length Thresholds</div>'
-        + "".join(chips)
-        + "</div>"
+        '<span style="display:inline-flex;align-items:center;margin:.25rem .5rem;padding:.3rem .6rem;'
+        'border-radius:999px;background:#e74c3c;color:#fff;font-weight:600;font-size:.85rem;">140 sec</span>'
+        '<span style="margin-right:1rem;opacity:.85;font-size:.9rem">≥ 2400 vph</span>'
+        '<span style="display:inline-flex;align-items:center;margin:.25rem .5rem;padding:.3rem .6rem;'
+        'border-radius:999px;background:#f39c12;color:#fff;font-weight:600;font-size:.85rem;">130 sec</span>'
+        '<span style="margin-right:1rem;opacity:.85;font-size:.9rem">≥ 1500 vph</span>'
+        '<span style="display:inline-flex;align-items:center;margin:.25rem .5rem;padding:.3rem .6rem;'
+        'border-radius:999px;background:#3498db;color:#fff;font-weight:600;font-size:.85rem;">120 sec</span>'
+        '<span style="margin-right:1rem;opacity:.85;font-size:.9rem">≥ 600 vph</span>'
+        '<span style="display:inline-flex;align-items:center;margin:.25rem .5rem;padding:.3rem .6rem;'
+        'border-radius:999px;background:#27ae60;color:#fff;font-weight:600;font-size:.85rem;">110 sec</span>'
+        '<span style="margin-right:1rem;opacity:.85;font-size:.9rem">≥ 300 vph</span>'
+        '<span style="display:inline-flex;align-items:center;margin:.25rem .5rem;padding:.3rem .6rem;'
+        'border-radius:999px;background:#7f8c8d;color:#fff;font-weight:600;font-size:.85rem;">Free mode</span>'
+        '<span style="margin-right:1rem;opacity:.85;font-size:.9rem">&lt; 300 vph</span>'
+        '</div>'
     )
 
 
@@ -120,8 +115,11 @@ def _sec_value(label: str) -> int:
 def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") -> None:
     """Render the enhanced Cycle Length Recommendations section."""
 
-    if raw.empty:
+    if raw is None or raw.empty:
         st.info("No hourly volume data available for cycle length recommendations.")
+        return
+    if "local_datetime" not in raw.columns or "total_volume" not in raw.columns:
+        st.info("Required columns not found: 'local_datetime', 'total_volume'.")
         return
 
     # ---- Context values for header ----
@@ -149,80 +147,39 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     else:
         direction_label = "N/A"
 
-    # ---- Header (dedented HTML to avoid markdown code block rendering) ----
-    header_html = textwrap.dedent(f"""
-    <div style="
-        background: linear-gradient(135deg, #2b77e5 0%, #19c3e6 100%);
-        border-radius: 16px;
-        padding: 22px 24px 20px;
-        color: #fff;
-        box-shadow: 0 10px 26px rgba(25, 115, 210, .25);
-        margin: 8px 0 16px;
-        text-align: left;
-    ">
-      <div style="display:flex; align-items:center; gap:12px;">
-        <div style="
-            width:40px; height:40px; border-radius:10px;
-            background: rgba(255,255,255,.18);
-            display:flex; align-items:center; justify-content:center;
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,.15);
-        ">
-          <span style="font-size:20px;">🔁</span>
-        </div>
-        <div style="font-size:2.1rem; font-weight:800; letter-spacing:.2px; line-height:1.1;">
-          Cycle Length Recommendations
-        </div>
-      </div>
-
-      <div style="display:flex; flex-wrap:wrap; gap:8px 10px; margin:12px 0 6px;">
-        <span style="
-            display:inline-flex; align-items:center; gap:6px;
-            padding:6px 10px; border-radius:999px;
-            background: rgba(255,255,255,.16);
-            font-weight:700; font-size:0.95rem;
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
-        ">
-          <span style="opacity:.9;">Intersection:</span>
-          <span style="opacity:1;">{intersection_label}</span>
-        </span>
-
-        <span style="
-            display:inline-flex; align-items:center; gap:6px;
-            padding:6px 10px; border-radius:999px;
-            background: rgba(255,255,255,.16);
-            font-weight:700; font-size:0.95rem;
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
-        ">
-          <span style="opacity:.9;">Direction:</span>
-          <span style="opacity:1;">{direction_label}</span>
-        </span>
-
-        <span style="
-            display:inline-flex; align-items:center; gap:6px;
-            padding:6px 10px; border-radius:999px;
-            background: rgba(255,255,255,.16);
-            font-weight:700; font-size:0.95rem;
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
-        ">
-          <span style="opacity:.9;">Study Type:</span>
-          <span style="opacity:1;">Hourly Analysis</span>
-        </span>
-      </div>
-
-      <div style="display:flex; align-items:center; gap:8px; margin-top:2px;">
-        <span style="
-            width:24px; height:24px; border-radius:8px;
-            background: rgba(255,255,255,.18);
-            display:inline-flex; align-items:center; justify-content:center;
-            font-size:13px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.16);
-        ">📅</span>
-        <span style="font-size:1.05rem; font-weight:600; opacity:.95;">
-          {start_label} — {end_label}
-        </span>
-      </div>
-    </div>
-    """)
+    # ---- Header (no leading spaces / no multiline style attributes) ----
+    header_html = (
+        '<div style="background: linear-gradient(135deg, #2b77e5 0%, #19c3e6 100%); border-radius: 16px; '
+        'padding: 22px 24px 20px; color: #fff; box-shadow: 0 10px 26px rgba(25,115,210,.25); '
+        'margin: 8px 0 16px; text-align: left;">'
+        '<div style="display:flex; align-items:center; gap:12px;">'
+        '<div style="width:40px; height:40px; border-radius:10px; background: rgba(255,255,255,.18); '
+        'display:flex; align-items:center; justify-content:center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15);">'
+        '<span style="font-size:20px;">🔁</span></div>'
+        '<div style="font-size:2.1rem; font-weight:800; letter-spacing:.2px; line-height:1.1;">'
+        'Cycle Length Recommendations</div></div>'
+        '<div style="display:flex; flex-wrap:wrap; gap:8px 10px; margin:12px 0 6px;">'
+        '<span style="display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; '
+        'background: rgba(255,255,255,.16); font-weight:700; font-size:.95rem; '
+        'box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);"><span style="opacity:.9;">Intersection:</span>'
+        f'<span style="opacity:1;">{intersection_label}</span></span>'
+        '<span style="display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; '
+        'background: rgba(255,255,255,.16); font-weight:700; font-size:.95rem; '
+        'box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);"><span style="opacity:.9;">Direction:</span>'
+        f'<span style="opacity:1;">{direction_label}</span></span>'
+        '<span style="display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; '
+        'background: rgba(255,255,255,.16); font-weight:700; font-size:.95rem; '
+        'box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);"><span style="opacity:.9;">Study Type:</span>'
+        '<span style="opacity:1;">Hourly Analysis</span></span></div>'
+        '<div style="display:flex; align-items:center; gap:8px; margin-top:2px;">'
+        '<span style="width:24px; height:24px; border-radius:8px; background: rgba(255,255,255,.18); '
+        'display:inline-flex; align-items:center; justify-content:center; font-size:13px; '
+        'box-shadow: inset 0 0 0 1px rgba(255,255,255,.16);">📅</span>'
+        f'<span style="font-size:1.05rem; font-weight:600; opacity:.95;">{start_label} — {end_label}</span>'
+        '</div></div>'
+    )
     st.markdown(header_html, unsafe_allow_html=True)
+    st.markdown(_legend_html(), unsafe_allow_html=True)
 
     # Controls
     c1, c2 = st.columns([2, 1.6])
@@ -243,11 +200,13 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
             key=f"{key_prefix}_current",
         )
 
-    # Legend
-    st.markdown(_legend_html(), unsafe_allow_html=True)
-
     # Time period filtering
-    period_map = {"AM (05:00-10:00)": "AM", "MD (11:00-15:00)": "MD", "PM (16:00-20:00)": "PM", "All Day": "ALL"}
+    period_map = {
+        "AM (05:00-10:00)": "AM",
+        "MD (11:00-15:00)": "MD",
+        "PM (16:00-20:00)": "PM",
+        "All Day": "ALL",
+    }
     selected_period = period_map[time_period]
     period_data = raw if selected_period == "ALL" else filter_by_period(raw, "local_datetime", selected_period)
     if period_data.empty:
@@ -310,7 +269,6 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         system_eff = (optimal_hours / total_hours * 100) if total_hours else 0
         st.metric("✅ Optimal Hours", optimal_hours, delta=f"{system_eff:.0f}% efficiency")
     with k3:
-        # Keep counts only (no hour lists here)
         st.metric("🔧 Changes Needed", changes_needed, delta=f"↑ {len(inc_hours_list)} • ↓ {len(red_hours_list)}")
     with k4:
         st.metric("⚠️ Hours Above High-Volume Threshold", f"{high_hours}", delta=f"{high_share:.1f}% of time")
