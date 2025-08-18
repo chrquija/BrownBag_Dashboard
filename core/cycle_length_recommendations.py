@@ -165,7 +165,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     c1, c2 = st.columns([2, 1.6])
     with c1:
         time_period = st.selectbox(
-            "🕐 Time Period",
+            "🕐 Select Time Period",
             ["AM (05:00-10:00)", "MD (11:00-15:00)", "PM (16:00-20:00)", "All Day"],
             index=0,
             help="Analyze AM, Midday, PM, or All Day periods",
@@ -173,7 +173,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         )
     with c2:
         current_cycle = st.selectbox(
-            "⚙️ Current System Cycle",
+            "⚙️ Select Current Cycle Length",
             CYCLE_ORDER[::-1],  # show bigger first: 140, 130, 120, 110, Free
             index=0,
             help="Cycle used currently; compared against recommendations",
