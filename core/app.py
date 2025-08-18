@@ -166,7 +166,7 @@ with tab1:
         status_text.empty()
 
         with st.sidebar:
-            with st.expander("🚧 Performance Analysis Controls", expanded=False):
+            with st.expander("TAB 1️⃣ Controls", expanded=False):
                 seg_options = ["All Segments"] + sorted(corridor_df["segment_name"].dropna().unique().tolist())
                 corridor = st.selectbox(
                     "🛣️ Select Corridor Segment",
@@ -473,7 +473,7 @@ with tab2:
         status_text.empty()
 
         with st.sidebar:
-            with st.expander("📊 Volume Analysis Controls", expanded=False):
+            with st.expander("TAB 2️⃣ CONTROLS", expanded=False):
                 intersections = ["All Intersections"] + sorted(
                     volume_df["intersection_name"].dropna().unique().tolist()
                 )
