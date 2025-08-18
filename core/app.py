@@ -141,7 +141,7 @@ st.markdown("""
 # =========================
 # Tabs
 # =========================
-tab1, tab2 = st.tabs(["1️⃣ ITERIS CLEARGUIDE DATA", "2️⃣ KINETIC MOBILITY DATA"])
+tab1, tab2 = st.tabs(["TAB 1️⃣: ITERIS CLEARGUIDE", "TAB 2️⃣: KINETIC MOBILITY"])
 
 # -------------------------
 # TAB 1: Performance / Travel Time
