@@ -272,6 +272,9 @@ with tab1:
                                 if col in raw_data:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
 
+                            #KPI Title for Tab 1
+                            st.subheader("🚦 Corridor Performance Metrics")
+
                             # --- Five KPI row (interpretable + badges) ---
                             k = compute_perf_kpis_interpretable(raw_data, HIGH_DELAY_SEC)
 
