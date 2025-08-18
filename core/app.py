@@ -147,7 +147,7 @@ tab1, tab2 = st.tabs(["1️⃣ ITERIS CLEARGUIDE", "2️⃣ KINETIC MOBILITY"])
 # TAB 1: Performance / Travel Time
 # -------------------------
 with tab1:
-    st.header("*🚧 Analyzing Speed, Delay, and Travel Time*")
+    st.header("*🚧 Corridor Performance Analysis*")
 
     progress_bar = st.progress(0)
     status_text = st.empty()
