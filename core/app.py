@@ -165,15 +165,19 @@ with tab1:
         status_text.empty()
 
         with st.sidebar:
-            # Logos (centered) above controls
-            st.markdown("<div style='text-align:center;'>", unsafe_allow_html=True)
-            st.image("Logos/ACE-logo-HiRes.jpg", width=210)
-            st.image("Logos/CV Sync__.jpg", width=205)
-            st.markdown("</div>", unsafe_allow_html=True)
+            # Logos (square edges; no CSS rounding)
+            c1, c2 = st.columns(2)
+            with c1:
+                st.image("Logos/ACE-logo-HiRes.jpg", width=100)
+            with c2:
+                st.image("Logos/CV Sync__.jpg", width=95)
 
-            # subtle divider
-            st.markdown("<hr style='border:0;height:1px;background:rgba(79,172,254,.35);margin:10px 0 8px;'>",
-                        unsafe_allow_html=True)
+            # Divider you liked
+            st.markdown(
+                "<hr style='border:0;height:1px;background:rgba(79,172,254,.35);margin:10px 0 8px;'>",
+                unsafe_allow_html=True,
+            )
+
 
         with st.sidebar:
             with st.expander("TAB 1️⃣ Controls", expanded=False):
