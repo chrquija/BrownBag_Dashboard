@@ -118,11 +118,48 @@ def _sec_value(label: str) -> int:
 # -------------------------
 def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") -> None:
     """Render the enhanced Cycle Length Recommendations section."""
-    st.subheader("🔁 Cycle Length Recommendations for CVAG — Hourly Analysis")
 
     if raw.empty:
         st.info("No hourly volume data available for cycle length recommendations.")
         return
+
+    # ---- Context subtitle directly under the section title ----
+    # Build: Intersection • Direction • Date range with day names
+    raw = raw.copy()
+    raw["local_datetime"] = pd.to_datetime(raw["local_datetime"], errors="coerce")
+
+    start_dt = raw["local_datetime"].min()
+    end_dt = raw["local_datetime"].max()
+    start_label = start_dt.strftime("%A, %b %d, %Y") if pd.notnull(start_dt) else "N/A"
+    end_label = end_dt.strftime("%A, %b %d, %Y") if pd.notnull(end_dt) else "N/A"
+
+    intersections = sorted(raw["intersection_name"].dropna().unique().tolist()) if "intersection_name" in raw else []
+    if len(intersections) == 1:
+        intersection_label = intersections[0]
+    elif len(intersections) > 1:
+        intersection_label = f"{len(intersections)} Intersections"
+    else:
+        intersection_label = "N/A"
+
+    directions = sorted(raw["direction"].dropna().unique().tolist()) if "direction" in raw else []
+    if len(directions) == 1:
+        direction_label = directions[0]
+    elif len(directions) > 1:
+        direction_label = "All Directions"
+    else:
+        direction_label = "N/A"
+
+    # Title + subtitle block
+    st.markdown(
+        f"""
+        <div class="context-header" style="margin-top:.5rem;">
+            <h2>🔁 Cycle Length Recommendations — Hourly Analysis</h2>
+            <p><strong>Intersection:</strong> {intersection_label} • <strong>Direction:</strong> {direction_label}</p>
+            <p><strong>Date Range:</strong> {start_label} — {end_label}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Controls
     c1, c2 = st.columns([2, 1.6])
@@ -154,7 +191,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         "All Day": "ALL",
     }
     selected_period = period_map[time_period]
-    period_data = raw.copy() if selected_period == "ALL" else filter_by_period(raw, "local_datetime", selected_period)
+    period_data = raw if selected_period == "ALL" else filter_by_period(raw, "local_datetime", selected_period)
     if period_data.empty:
         st.warning("⚠️ No data available for the selected time period.")
         return
@@ -264,7 +301,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         column_config={
             "Hour": st.column_config.TextColumn("Hour", width="small"),
             "Avg Volume (vph)": st.column_config.NumberColumn("Avg Volume (vph)", format="%d"),
-            # Renamed header as requested (display label only)
+            # Display label updates
             "CVAG Recommendation": st.column_config.TextColumn("Cycle Length Recommendation For CVAG", width="medium"),
             "Status": st.column_config.TextColumn("Cycle Length Status", width="medium"),
         },
