@@ -167,6 +167,7 @@ with tab1:
 
         with st.sidebar:
             with st.expander("TAB 1️⃣ Controls", expanded=False):
+                st.caption("Analysis Variables: Speed, Delay, and Travel Time")
                 seg_options = ["All Segments"] + sorted(corridor_df["segment_name"].dropna().unique().tolist())
                 corridor = st.selectbox(
                     "🛣️ Select Corridor Segment",
@@ -474,9 +475,11 @@ with tab2:
 
         with st.sidebar:
             with st.expander("TAB 2️⃣ CONTROLS", expanded=False):
+                st.caption("Analysis Variables: Vehicle Volume")
                 intersections = ["All Intersections"] + sorted(
                     volume_df["intersection_name"].dropna().unique().tolist()
                 )
+
                 intersection = st.selectbox("🚦 Select Intersection", intersections, key="intersection_vol")
 
                 min_date = volume_df["local_datetime"].dt.date.min()
