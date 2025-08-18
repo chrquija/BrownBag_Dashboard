@@ -196,6 +196,10 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         st.warning("⚠️ No data available for the selected time period.")
         return
 
+    # Hour window label for KPIs
+    period_windows = {"AM": "05:00–10:00", "MD": "11:00–15:00", "PM": "16:00–20:00", "ALL": "00:00–23:00"}
+    hours_window_str = period_windows.get(selected_period, "—")
+
     # Hourly aggregation
     period_data["hour"] = period_data["local_datetime"].dt.hour
     hourly = period_data.groupby("hour", as_index=False)["total_volume"].mean()
@@ -207,27 +211,53 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     hourly["Hour"] = hourly["hour"].apply(lambda x: f"{x:02d}:00")
     hourly["Rec (sec)"] = hourly["CVAG Recommendation"].apply(_sec_value)
 
-    # KPIs
+    # --- KPI calculations (updated) ---
     total_hours = len(hourly)
     optimal_hours = int((hourly["Status"] == "🟢 OPTIMAL").sum())
     changes_needed = total_hours - optimal_hours
-    system_eff = (optimal_hours / total_hours * 100) if total_hours else 0
-    avg_vol = int(hourly["Volume"].mean()) if total_hours else 0
+    inc_hours_list = hourly.loc[hourly["Status"] == "⬆️ INCREASE", "Hour"].tolist()
+    red_hours_list = hourly.loc[hourly["Status"] == "🔽 REDUCE", "Hour"].tolist()
+
+    # Hours above high-volume threshold (share of time) computed from raw rows in the selected time period
+    HIGH_VOLUME_THRESHOLD_VPH = 1200  # default; align with your constants if you expose controls
+    period_data["total_volume"] = pd.to_numeric(period_data["total_volume"], errors="coerce")
+    total_rows = int(period_data["total_volume"].count())
+    high_hours = int((period_data["total_volume"] > HIGH_VOLUME_THRESHOLD_VPH).sum()) if total_rows > 0 else 0
+    high_share = (high_hours / total_rows * 100) if total_rows > 0 else 0.0
+
+    # Peak capacity utilization (% of theoretical capacity)
+    THEORETICAL_LINK_CAPACITY_VPH = 1800  # default; align with your constants if desired
+    peak_volume_pd = float(period_data["total_volume"].max()) if total_rows > 0 else 0.0
+    peak_capacity_util = (peak_volume_pd / THEORETICAL_LINK_CAPACITY_VPH * 100) if THEORETICAL_LINK_CAPACITY_VPH else 0.0
+
+    # Helper to compactly show lists of hours
+    def _hours_preview(lst, max_items=5):
+        if not lst:
+            return "None"
+        tail = "" if len(lst) <= max_items else f" (+{len(lst)-max_items} more)"
+        return ", ".join(lst[:max_items]) + tail
 
     k1, k2, k3, k4, k5 = st.columns(5)
     with k1:
-        st.metric("📅 Hours Analyzed", total_hours)
+        # Keep Hours Analyzed, specify the hour window you’re analyzing
+        st.metric("📅 Hours Analyzed", total_hours, delta=hours_window_str)
     with k2:
+        # Keep Optimal Hours as-is; show efficiency in delta
+        system_eff = (optimal_hours / total_hours * 100) if total_hours else 0
         st.metric("✅ Optimal Hours", optimal_hours, delta=f"{system_eff:.0f}% efficiency")
     with k3:
-        st.metric("🔧 Changes Needed", changes_needed)
+        # Keep Changes Needed but include which hours need increase/reduce
+        st.metric("🔧 Changes Needed", changes_needed, delta=f"↑ {len(inc_hours_list)} • ↓ {len(red_hours_list)}")
+        st.caption(f"↑ {_hours_preview(inc_hours_list)}")
+        st.caption(f"↓ {_hours_preview(red_hours_list)}")
     with k4:
-        st.metric("📊 Avg Volume", f"{avg_vol:,} vph")
+        # Replace Avg Volume with Hours Above High-Volume Threshold (and share of time)
+        st.metric("⚠️ Hours Above High-Volume Threshold", f"{high_hours}", delta=f"{high_share:.1f}% of time")
+        st.caption(f"Threshold: > {HIGH_VOLUME_THRESHOLD_VPH:,} vph")
     with k5:
-        # Distribution by recommendation bucket
-        by_rec = hourly["CVAG Recommendation"].value_counts().reindex(CYCLE_ORDER, fill_value=0)
-        top_rec = by_rec.idxmax()
-        st.metric("🏷️ Most Recommended", top_rec)
+        # Peak Capacity Utilization (% of theoretical capacity)
+        st.metric("🚦 Peak Capacity Utilization", f"{peak_capacity_util:.0f}%", delta=f"Peak {peak_volume_pd:,.0f} vph")
+        st.caption(f"Theoretical capacity: {THEORETICAL_LINK_CAPACITY_VPH:,} vph")
 
     # Charts row
     ch1, ch2 = st.columns([2.2, 1.8])
@@ -269,27 +299,23 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         st.plotly_chart(fig, use_container_width=True)
 
     with ch2:
-        # Stacked bar: hours by Status
+        # Change Hours by Status to a pie chart
         status_counts = hourly["Status"].value_counts().reindex(["🟢 OPTIMAL", "⬆️ INCREASE", "🔽 REDUCE"], fill_value=0)
-        fig2 = go.Figure(
-            data=[
-                go.Bar(
-                    x=status_counts.index,
-                    y=status_counts.values,
-                    marker_color=[STATUS_COLORS[s] for s in status_counts.index],
-                    text=status_counts.values,
-                    textposition="outside",
-                )
-            ]
-        )
-        fig2.update_layout(
+        pie = px.pie(
+            names=status_counts.index,
+            values=status_counts.values,
             title="Hours by Status",
-            yaxis_title="Hours",
-            template="plotly_white",
-            height=420,
-            margin=dict(l=10, r=10, t=50, b=10),
+            color=status_counts.index,
+            color_discrete_map={
+                "🟢 OPTIMAL": STATUS_COLORS["🟢 OPTIMAL"],
+                "⬆️ INCREASE": STATUS_COLORS["⬆️ INCREASE"],
+                "🔽 REDUCE": STATUS_COLORS["🔽 REDUCE"],
+            },
+            hole=0.35,
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        pie.update_traces(textposition="inside", textinfo="label+percent")
+        pie.update_layout(template="plotly_white", height=420, margin=dict(l=10, r=10, t=50, b=10))
+        st.plotly_chart(pie, use_container_width=True)
 
     # Stylized table
     hourly_display = hourly[["Hour", "Volume", "CVAG Recommendation", "Status"]].rename(
@@ -301,7 +327,6 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         column_config={
             "Hour": st.column_config.TextColumn("Hour", width="small"),
             "Avg Volume (vph)": st.column_config.NumberColumn("Avg Volume (vph)", format="%d"),
-            # Display label updates
             "CVAG Recommendation": st.column_config.TextColumn("Cycle Length Recommendation For CVAG", width="medium"),
             "Status": st.column_config.TextColumn("Cycle Length Status", width="medium"),
         },
@@ -317,10 +342,10 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         f"""
         <div class="insight-box" style="margin-top:.5rem;">
             <h4>💡 Cycle Length Optimization Insights</h4>
-            <p><strong>📊 System Efficiency:</strong> {system_eff:.0f}% optimal ({optimal_hours}/{total_hours} hours)</p>
-            <p><strong>📈 Volume Profile:</strong> Peak {peak_volume:,} vph at {peak_hour} • Average {avg_vol:,} vph ({time_period.lower()})</p>
-            <p><strong>🔧 Actions:</strong> {inc_hours} hours need longer cycles • {red_hours} hours need shorter cycles</p>
-            <p><strong>🎯 Priority:</strong> {"Focus on peak hour optimization" if system_eff < 70 else "Fine-tune existing timing" if system_eff < 90 else "System appears well-optimized"}</p>
+            <p><strong>📊 System Efficiency:</strong> {optimal_hours}/{total_hours} hours optimal ({(optimal_hours/total_hours*100 if total_hours else 0):.0f}%)</p>
+            <p><strong>📈 Volume Profile:</strong> Peak {peak_volume:,} vph at {peak_hour} • Threshold exceedance: {high_hours} hours ({high_share:.1f}% of time)</p>
+            <p><strong>🔧 Actions:</strong> ↑ {inc_hours} hours need longer cycles • ↓ {red_hours} hours need shorter cycles</p>
+            <p><strong>🚦 Capacity:</strong> Peak utilization {peak_capacity_util:.0f}% of theoretical ({THEORETICAL_LINK_CAPACITY_VPH:,} vph)</p>
         </div>
         """,
         unsafe_allow_html=True,
