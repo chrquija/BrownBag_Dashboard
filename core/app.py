@@ -556,7 +556,7 @@ with tab2:
                                     badge = "badge-fair"
                                 else:
                                     badge = "badge-good"
-                                st.metric("🔥 Peak Demand", f"{peak:,.0f} vph", delta=f"95th: {p95:,.0f}")
+                                st.metric("🔥 Peak Demand", f"{peak:,.0f} vehicles max", delta=f"95th: {p95:,.0f}")
                                 st.markdown(
                                     f'<span class="performance-badge {badge}">{util:.0f}% Capacity</span>',
                                     unsafe_allow_html=True,
