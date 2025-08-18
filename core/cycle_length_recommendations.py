@@ -153,7 +153,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     st.markdown(
         f"""
         <div class="context-header" style="margin-top:.5rem;">
-            <h2>🔁 Cycle Length Recommendations — Hourly Analysis</h2>
+            <h2>🔁 Cycle Length Recommendations for CVAG — Hourly Analysis</h2>
             <p><strong>Intersection:</strong> {intersection_label} • <strong>Direction:</strong> {direction_label}</p>
             <p><strong>Date Range:</strong> {start_label} — {end_label}</p>
         </div>
