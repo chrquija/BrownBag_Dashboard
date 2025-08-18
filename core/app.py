@@ -147,8 +147,7 @@ tab1, tab2 = st.tabs(["1️⃣ ITERIS CLEARGUIDE", "2️⃣ KINETIC MOBILITY"])
 # TAB 1: Performance / Travel Time
 # -------------------------
 with tab1:
-    st.header("🚧 Corridor Performance Analysis")
-
+    # (Replaces the old small header with a gradient banner AFTER we know the selected range/records)
     progress_bar = st.progress(0)
     status_text = st.empty()
     status_text.text("Loading corridor performance data...")
@@ -186,7 +185,7 @@ with tab1:
                     "Data Aggregation",
                     ["Hourly", "Daily", "Weekly", "Monthly"],
                     index=0,
-                    key="granularity_perf",  # 👈 unique key for Tab 1
+                    key="granularity_perf",
                     help="Higher aggregation smooths trends but may hide peaks",
                 )
 
@@ -236,13 +235,26 @@ with tab1:
                         data_span = (date_range[1] - date_range[0]).days + 1
                         time_context = f" • {time_filter}" if (granularity == "Hourly" and time_filter) else ""
 
+                        # REPLACED: Big gradient title with same info (corridor, date span, aggregation, records)
                         st.markdown(
                             f"""
-                        <div class="context-header">
-                            <h2>📊 {corridor}</h2>
-                            <p>📅 {date_range[0].strftime('%b %d, %Y')} to {date_range[1].strftime('%b %d, %Y')}
-                            ({data_span} days) • {granularity} Aggregation{time_context}</p>
-                            <p>📈 Analyzing {total_records:,} data points across the selected period</p>
+                        <div style="
+                            background: linear-gradient(135deg, #2b77e5 0%, #19c3e6 100%);
+                            border-radius:16px; padding:18px 20px; color:#fff; margin:8px 0 14px;
+                            box-shadow:0 10px 26px rgba(25,115,210,.25); text-align:left;
+                            font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+                          <div style="display:flex; align-items:center; gap:10px;">
+                            <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.18);
+                                        display:flex;align-items:center;justify-content:center;
+                                        box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);">📊</div>
+                            <div style="font-size:1.9rem;font-weight:800;letter-spacing:.2px;">
+                              {corridor}
+                            </div>
+                          </div>
+                          <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
+                            <div>📅 {date_range[0].strftime('%b %d, %Y')} to {date_range[1].strftime('%b %d, %Y')} ({data_span} days) • {granularity} Aggregation{time_context}</div>
+                            <div>✅ Analyzing {total_records:,} data points across the selected period</div>
+                          </div>
                         </div>
                         """,
                             unsafe_allow_html=True,
@@ -259,8 +271,6 @@ with tab1:
                             for col in ["average_delay", "average_traveltime", "average_speed"]:
                                 if col in raw_data:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
-
-                            # After coercing numeric types, replace the old col1..col5 KPI block with this:
 
                             # --- Five KPI row (interpretable + badges) ---
                             k = compute_perf_kpis_interpretable(raw_data, HIGH_DELAY_SEC)
@@ -455,8 +465,6 @@ with tab1:
 # TAB 2: Volume / Capacity
 # -------------------------
 with tab2:
-    st.header("📊 Advanced Traffic Demand & Capacity Analysis")
-
     progress_bar = st.progress(0)
     status_text = st.empty()
     status_text.text("Loading traffic demand data...")
@@ -493,7 +501,7 @@ with tab2:
                     "Data Aggregation",
                     ["Hourly", "Daily", "Weekly", "Monthly"],
                     index=0,
-                    key="granularity_vol",  # 👈 unique key for Tab 2
+                    key="granularity_vol",
                 )
 
                 direction_options = ["All Directions"] + sorted(volume_df["direction"].dropna().unique().tolist())
@@ -516,13 +524,28 @@ with tab2:
                         st.warning("⚠️ No volume data available for the selected range.")
                     else:
                         span = (date_range_vol[1] - date_range_vol[0]).days + 1
+                        total_obs = len(filtered_volume_data)
+
+                        # REPLACED: Big gradient title with same info (intersection, dates, aggregation, observations, direction)
                         st.markdown(
                             f"""
-                        <div class="context-header">
-                            <h2>📊 Volume Analysis: {intersection}</h2>
-                            <p>📅 {date_range_vol[0].strftime('%b %d, %Y')} to {date_range_vol[1].strftime('%b %d, %Y')}
-                            ({span} days) • {granularity_vol} Aggregation</p>
-                            <p>📈 {len(filtered_volume_data):,} observations • Direction: {direction_filter}</p>
+                        <div style="
+                            background: linear-gradient(135deg, #2b77e5 0%, #19c3e6 100%);
+                            border-radius:16px; padding:18px 20px; color:#fff; margin:8px 0 14px;
+                            box-shadow:0 10px 26px rgba(25,115,210,.25); text-align:left;
+                            font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+                          <div style="display:flex; align-items:center; gap:10px;">
+                            <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.18);
+                                        display:flex;align-items:center;justify-content:center;
+                                        box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);">📊</div>
+                            <div style="font-size:1.9rem;font-weight:800;letter-spacing:.2px;">
+                              Volume Analysis: {intersection}
+                            </div>
+                          </div>
+                          <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
+                            <div>📅 {date_range_vol[0].strftime('%b %d, %Y')} to {date_range_vol[1].strftime('%b %d, %Y')} ({span} days) • {granularity_vol} Aggregation</div>
+                            <div>✅ {total_obs:,} observations • Direction: {direction_filter}</div>
+                          </div>
                         </div>
                         """,
                             unsafe_allow_html=True,
@@ -842,16 +865,14 @@ FOOTER = """
   function updateFooterColors() {
     const body = document.body;
     const computed = getComputedStyle(body);
-    const bgColor = computed.backgroundColor || computed.getPropertyValue('--background-color') || '#ffffff';
+    const bgColor = computed.backgroundColor || getComputedStyle(document.documentElement).getPropertyValue('--background-color') || '#ffffff';
 
-    let r, g, b;
+    let r=255,g=255,b=255;
     if (bgColor.startsWith('rgb')) {
-      const match = bgColor.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);
-      if (match) { r = parseInt(match[1]); g = parseInt(match[2]); b = parseInt(match[3]); }
-      else { r = g = b = 255; }
-    } else { r = g = b = 255; }
-
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      const m = bgColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (m) { r = parseInt(m[1]); g = parseInt(m[2]); b = parseInt(m[3]); }
+    }
+    const luminance = (0.299*r + 0.587*g + 0.114*b) / 255;
     const isDark = luminance < 0.5;
 
     const subtitle = document.querySelector('.footer-sub');
@@ -870,13 +891,10 @@ FOOTER = """
       }
     }
   }
-
   updateFooterColors();
-
   const observer = new MutationObserver(updateFooterColors);
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
   observer.observe(document.body, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
-
   setInterval(updateFooterColors, 1000);
 })();
 </script>
