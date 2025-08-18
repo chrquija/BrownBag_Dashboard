@@ -160,7 +160,6 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
                     <span>Cycle Length Recommendations</span>
                 </div>
                 <div style="font-size:1.25rem; font-weight:600; opacity:.98; margin-top:.35rem;">
-                    Hourly Analysis
                 </div>
                 <div style="margin-top:1.0rem; font-size:1.1rem; font-weight:600;">
                     <span>Intersection:</span> {intersection_label} • <span>Direction:</span> {direction_label}
