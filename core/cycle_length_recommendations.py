@@ -149,82 +149,28 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     else:
         direction_label = "N/A"
 
-        # Clean, left-aligned, high-contrast header with larger title + context chips
-        st.markdown(
-            f"""
-            <div style="
-                background: linear-gradient(135deg, #2b77e5 0%, #19c3e6 100%);
-                border-radius: 16px;
-                padding: 22px 24px 20px;
-                color: #fff;
-                box-shadow: 0 10px 26px rgba(25, 115, 210, .25);
-                margin: 8px 0 16px;
-                text-align: left;
-            ">
-              <div style="display:flex; align-items:center; gap:12px;">
+    # Title + subtitle block (bigger, clearer)
+    st.markdown(
+        f"""
+            <div class="context-header" style="margin-top:.6rem; padding:2.2rem 2rem;">
                 <div style="
-                    width:40px; height:40px; border-radius:10px;
-                    background: rgba(255,255,255,.18);
-                    display:flex; align-items:center; justify-content:center;
-                    box-shadow: inset 0 0 0 1px rgba(255,255,255,.15);
-                ">
-                  <span style="font-size:20px;">🔁</span>
+                    font-size:2.6rem; font-weight:900; line-height:1.18;
+                    letter-spacing:.2px; display:flex; align-items:center; gap:.65rem;">
+                    <span>🔁</span>
+                    <span>Cycle Length Recommendations</span>
                 </div>
-                <div style="font-size:2.1rem; font-weight:800; letter-spacing:.2px; line-height:1.1;">
-                  Cycle Length Recommendations
+                <div style="font-size:1.25rem; font-weight:600; opacity:.98; margin-top:.35rem;">
                 </div>
-              </div>
-
-              <div style="display:flex; flex-wrap:wrap; gap:8px 10px; margin:12px 0 6px;">
-                <span style="
-                    display:inline-flex; align-items:center; gap:6px;
-                    padding:6px 10px; border-radius:999px;
-                    background: rgba(255,255,255,.16);
-                    font-weight:700; font-size:0.95rem;
-                    box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
-                ">
-                  <span style="opacity:.9;">Intersection:</span>
-                  <span style="opacity:1;">{intersection_label}</span>
-                </span>
-
-                <span style="
-                    display:inline-flex; align-items:center; gap:6px;
-                    padding:6px 10px; border-radius:999px;
-                    background: rgba(255,255,255,.16);
-                    font-weight:700; font-size:0.95rem;
-                    box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
-                ">
-                  <span style="opacity:.9;">Direction:</span>
-                  <span style="opacity:1;">{direction_label}</span>
-                </span>
-
-                <span style="
-                    display:inline-flex; align-items:center; gap:6px;
-                    padding:6px 10px; border-radius:999px;
-                    background: rgba(255,255,255,.16);
-                    font-weight:700; font-size:0.95rem;
-                    box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
-                ">
-                  <span style="opacity:.9;">Study Type:</span>
-                  <span style="opacity:1;">Hourly Analysis</span>
-                </span>
-              </div>
-
-              <div style="display:flex; align-items:center; gap:8px; margin-top:2px;">
-                <span style="
-                    width:24px; height:24px; border-radius:8px;
-                    background: rgba(255,255,255,.18);
-                    display:inline-flex; align-items:center; justify-content:center;
-                    font-size:13px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.16);
-                ">📅</span>
-                <span style="font-size:1.05rem; font-weight:600; opacity:.95;">
-                  {start_label} — {end_label}
-                </span>
-              </div>
+                <div style="margin-top:1.0rem; font-size:1.1rem; font-weight:600;">
+                    <span>Intersection:</span> {intersection_label} • <span>Direction:</span> {direction_label}
+                </div>
+                <div style="font-size:1.05rem; opacity:.95; margin-top:.25rem;">
+                    <span>Date Range:</span> {start_label} — {end_label}
+                </div>
             </div>
             """,
-            unsafe_allow_html=True,
-        )
+        unsafe_allow_html=True,
+    )
 
     # Controls
     c1, c2 = st.columns([2, 1.6])
