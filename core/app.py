@@ -305,7 +305,7 @@ with tab1:
                                 else:
                                     st.info("Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path.")
 
-                        # Big banner title (font inherits app theme)
+                        # Big banner title
                         st.markdown(
                             f"""
                         <div style="
@@ -329,6 +329,13 @@ with tab1:
                         """,
                             unsafe_allow_html=True,
                         )
+                        # Refresh button aligned to the right of the title area
+                        c_title_left, c_title_right = st.columns([0.78, 0.22])
+                        with c_title_right:
+                            if st.button("🔄 Refresh",
+                                         help="Clear cached data and recompute all KPIs, charts, and tables"):
+                                st.cache_data.clear()  # clears cached data from @st.cache_data
+                                st.rerun()  # reruns the whole app so everything refreshes
 
                         # Build raw_data for KPIs
                         raw_data = base_df[
