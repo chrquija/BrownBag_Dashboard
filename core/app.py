@@ -217,7 +217,7 @@ with tab1:
 
                 # O-D mode (origin → destination) replaces segment picker
                 od_mode = st.checkbox(
-                    "Analyze Travel Time Between Points (O-D)",
+                    "Origin - Destination Mode",
                     value=True,
                     help="Sum hourly travel times across consecutive segments between two points (uses dataset direction).",
                 )
