@@ -205,61 +205,60 @@ with tab1:
         progress_bar.empty()
         status_text.empty()
 
+        # ... existing code ...
         # Sidebar logos
         with st.sidebar:
             st.image("Logos/ACE-logo-HiRes.jpg", width=210)
             st.image("Logos/CV Sync__.jpg", width=205)
 
-
-        # Controls
+            # Controls
             with st.expander("TAB 1️⃣ Controls", expanded=False):
                 st.caption("Analysis Variables: Speed, Delay, and Travel Time")
 
-            # O-D mode (origin → destination) replaces segment picker
-            od_mode = st.checkbox(
-                "Analyze Travel Time Between Points (O-D)",
-                value=True,
-                help="Sum hourly travel times across consecutive segments between two points (uses dataset direction).",
-            )
-            origin, destination = None, None
-            if od_mode:
-                node_list_raw = _build_node_order(corridor_df)
+                # O-D mode (origin → destination) replaces segment picker
+                od_mode = st.checkbox(
+                    "Analyze Travel Time Between Points (O-D)",
+                    value=True,
+                    help="Sum hourly travel times across consecutive segments between two points (uses dataset direction).",
+                )
+                origin, destination = None, None
+                if od_mode:
+                    node_list_raw = _build_node_order(corridor_df)
 
-                # Force the list into canonical bottom→top order:
-                # 1) keep only known names in the desired order
-                # 2) append any unexpected names at the end to avoid losing options
-                known_in_data = [n for n in DESIRED_NODE_ORDER_BOTTOM_UP if n in node_list_raw]
-                extras = [n for n in node_list_raw if n not in DESIRED_NODE_ORDER_BOTTOM_UP]
-                node_list = known_in_data + extras
+                    # Force canonical bottom→top order
+                    known_in_data = [n for n in DESIRED_NODE_ORDER_BOTTOM_UP if n in node_list_raw]
+                    extras = [n for n in node_list_raw if n not in DESIRED_NODE_ORDER_BOTTOM_UP]
+                    node_list = known_in_data + extras
 
-                if len(node_list) >= 2:
-                    cA, cB = st.columns(2)
-                    with cA:
-                        origin = st.selectbox("Origin", node_list, index=0, key="od_origin")
-                    with cB:
-                        destination = st.selectbox("Destination", node_list, index=len(node_list) - 1,
-                                                   key="od_destination")
+                    if len(node_list) >= 2:
+                        cA, cB = st.columns(2)
+                        with cA:
+                            origin = st.selectbox("Origin", node_list, index=0, key="od_origin")
+                        with cB:
+                            destination = st.selectbox("Destination", node_list, index=len(node_list) - 1,
+                                                       key="od_destination")
 
-                    # Optional: quick validation preview to confirm the selected O-D maps to actual segments
-                    if origin and destination and origin in node_list and destination in node_list:
-                        i0, i1 = node_list.index(origin), node_list.index(destination)
-                        if i0 < i1:
-                            preview_segments = [f"{node_list[i]} → {node_list[i + 1]}" for i in range(i0, i1)]
-                            found = int(corridor_df["segment_name"].isin(preview_segments).sum())
-                            st.caption(f"Path preview: {found}/{len(preview_segments)} segments found in data.")
-                        else:
-                            st.caption("Path preview: reverse direction selected (no forward segments).")
-                else:
-                    st.info("Not enough nodes found to build O-D options.")
+                        # Optional: path coverage preview
+                        if origin and destination and origin in node_list and destination in node_list:
+                            i0, i1 = node_list.index(origin), node_list.index(destination)
+                            if i0 < i1:
+                                preview_segments = [f"{node_list[i]} → {node_list[i + 1]}" for i in range(i0, i1)]
+                                found = int(corridor_df["segment_name"].isin(preview_segments).sum())
+                                st.caption(f"Path preview: {found}/{len(preview_segments)} segments found in data.")
+                            else:
+                                st.caption("Path preview: reverse direction selected (no forward segments).")
+                    else:
+                        st.info("Not enough nodes found to build O-D options.")
 
-            min_date = corridor_df["local_datetime"].dt.date.min()
-            max_date = corridor_df["local_datetime"].dt.date.max()
+                # Analysis Period
+                min_date = corridor_df["local_datetime"].dt.date.min()
+                max_date = corridor_df["local_datetime"].dt.date.max()
+                st.markdown("#### 📅 Analysis Period")
+                date_range = date_range_preset_controls(min_date, max_date, key_prefix="perf")
 
-            st.markdown("#### 📅 Analysis Period")
-            date_range = date_range_preset_controls(min_date, max_date, key_prefix="perf")
-
-            st.markdown("#### ⏰ Analysis Settings")
-            granularity = st.selectbox(
+                # Analysis Settings
+                st.markdown("#### ⏰ Analysis Settings")
+                granularity = st.selectbox(
                     "Data Aggregation",
                     ["Hourly", "Daily", "Weekly", "Monthly"],
                     index=0,
@@ -267,8 +266,8 @@ with tab1:
                     help="Higher aggregation smooths trends but may hide peaks",
                 )
 
-            time_filter, start_hour, end_hour = None, None, None
-            if granularity == "Hourly":
+                time_filter, start_hour, end_hour = None, None, None
+                if granularity == "Hourly":
                     time_filter = st.selectbox(
                         "Time Period Focus",
                         [
@@ -287,6 +286,7 @@ with tab1:
                             start_hour = st.number_input("Start Hour (0–23)", 0, 23, 7, step=1, key="start_hour_perf")
                         with c2:
                             end_hour = st.number_input("End Hour (1–24)", 1, 24, 18, step=1, key="end_hour_perf")
+        # ... existing code ...
 
         # Main tab content
         if len(date_range) == 2:
