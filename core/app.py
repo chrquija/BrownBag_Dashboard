@@ -219,7 +219,7 @@ with tab1:
                 od_mode = st.checkbox(
                     "Origin - Destination Mode",
                     value=True,
-                    help="Sum hourly travel times across consecutive segments between two points (uses dataset direction).",
+                    help="Sum hourly travel times across consecutive segments between two points.",
                 )
                 origin, destination = None, None
                 if od_mode:
