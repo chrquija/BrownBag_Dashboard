@@ -47,6 +47,19 @@ HIGH_VOLUME_THRESHOLD_VPH = 1200
 CRITICAL_DELAY_SEC = 120
 HIGH_DELAY_SEC = 60
 
+# Canonical bottom → top node order (ensure labels match your dataset exactly)
+DESIRED_NODE_ORDER_BOTTOM_UP = [
+    "Avenue 52",
+    "Calle Tampico",
+    "Village Shopping Ctr",
+    "Avenue 50",
+    "Sagebrush Ave",
+    "Eisenhower Dr",
+    "Avenue 48",
+    "Avenue 47",
+    "Point Happy Simon",
+    "Hwy 111",
+]
 
 # Build ordered node list from segment_name like "A → B"
 def _build_node_order(df: pd.DataFrame) -> list[str]:
@@ -199,36 +212,54 @@ with tab1:
 
 
         # Controls
-        with st.sidebar:
-            with st.expander("TAB 1️⃣ Controls", expanded=False):
-                st.caption("Analysis Variables: Speed, Delay, and Travel Time")
+        with st.expander("TAB 1️⃣ Controls", expanded=False):
+            st.caption("Analysis Variables: Speed, Delay, and Travel Time")
 
-                # O-D mode (origin → destination) replaces segment picker
-                od_mode = st.checkbox(
-                    "Analyze Travel Time Between Points (O-D)",
-                    value=True,
-                    help="Sum hourly travel times across consecutive segments between two points (uses dataset direction).",
-                )
-                origin, destination = None, None
-                if od_mode:
-                    node_list = _build_node_order(corridor_df)
-                    if len(node_list) >= 2:
-                        cA, cB = st.columns(2)
-                        with cA:
-                            origin = st.selectbox("Origin", node_list, index=0, key="od_origin")
-                        with cB:
-                            destination = st.selectbox("Destination", node_list, index=len(node_list) - 1, key="od_destination")
-                    else:
-                        st.info("Not enough nodes found to build O-D options.")
+            # O-D mode (origin → destination) replaces segment picker
+            od_mode = st.checkbox(
+                "Analyze Travel Time Between Points (O-D)",
+                value=True,
+                help="Sum hourly travel times across consecutive segments between two points (uses dataset direction).",
+            )
+            origin, destination = None, None
+            if od_mode:
+                node_list_raw = _build_node_order(corridor_df)
 
-                min_date = corridor_df["local_datetime"].dt.date.min()
-                max_date = corridor_df["local_datetime"].dt.date.max()
+                # Force the list into canonical bottom→top order:
+                # 1) keep only known names in the desired order
+                # 2) append any unexpected names at the end to avoid losing options
+                known_in_data = [n for n in DESIRED_NODE_ORDER_BOTTOM_UP if n in node_list_raw]
+                extras = [n for n in node_list_raw if n not in DESIRED_NODE_ORDER_BOTTOM_UP]
+                node_list = known_in_data + extras
 
-                st.markdown("#### 📅 Analysis Period")
-                date_range = date_range_preset_controls(min_date, max_date, key_prefix="perf")
+                if len(node_list) >= 2:
+                    cA, cB = st.columns(2)
+                    with cA:
+                        origin = st.selectbox("Origin", node_list, index=0, key="od_origin")
+                    with cB:
+                        destination = st.selectbox("Destination", node_list, index=len(node_list) - 1,
+                                                   key="od_destination")
 
-                st.markdown("#### ⏰ Analysis Settings")
-                granularity = st.selectbox(
+                    # Optional: quick validation preview to confirm the selected O-D maps to actual segments
+                    if origin and destination and origin in node_list and destination in node_list:
+                        i0, i1 = node_list.index(origin), node_list.index(destination)
+                        if i0 < i1:
+                            preview_segments = [f"{node_list[i]} → {node_list[i + 1]}" for i in range(i0, i1)]
+                            found = int(corridor_df["segment_name"].isin(preview_segments).sum())
+                            st.caption(f"Path preview: {found}/{len(preview_segments)} segments found in data.")
+                        else:
+                            st.caption("Path preview: reverse direction selected (no forward segments).")
+                else:
+                    st.info("Not enough nodes found to build O-D options.")
+
+            min_date = corridor_df["local_datetime"].dt.date.min()
+            max_date = corridor_df["local_datetime"].dt.date.max()
+
+            st.markdown("#### 📅 Analysis Period")
+            date_range = date_range_preset_controls(min_date, max_date, key_prefix="perf")
+
+            st.markdown("#### ⏰ Analysis Settings")
+            granularity = st.selectbox(
                     "Data Aggregation",
                     ["Hourly", "Daily", "Weekly", "Monthly"],
                     index=0,
@@ -236,8 +267,8 @@ with tab1:
                     help="Higher aggregation smooths trends but may hide peaks",
                 )
 
-                time_filter, start_hour, end_hour = None, None, None
-                if granularity == "Hourly":
+            time_filter, start_hour, end_hour = None, None, None
+            if granularity == "Hourly":
                     time_filter = st.selectbox(
                         "Time Period Focus",
                         [
