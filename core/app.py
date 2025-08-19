@@ -191,18 +191,11 @@ with tab1:
         progress_bar.empty()
         status_text.empty()
 
-        # Sidebar logos + divider
+        # Sidebar logos
         with st.sidebar:
-            st.markdown(
-                """
-                <div style="display:flex;justify-content:center;align-items:center;gap:12px;margin:6px 0 8px;">
-                  <img src="Logos/ACE-logo-HiRes.jpg" alt="ADVANTEC Logo" style="height:30px;">
-                  <img src="Logos/CV Sync__.jpg" alt="CV SYNC Logo" style="height:30px;">
-                </div>
-                <hr style="border:0;height:1px;background:rgba(79,172,254,.35);margin:8px 0 10px;">
-                """,
-                unsafe_allow_html=True,
-            )
+            st.image("Logos/ACE-logo-HiRes.jpg", width=210)
+            st.image("Logos/CV Sync__.jpg", width=205)
+
 
         # Controls
         with st.sidebar:
