@@ -212,8 +212,8 @@ with tab1:
 
 
         # Controls
-        with st.expander("TAB 1️⃣ Controls", expanded=False):
-            st.caption("Analysis Variables: Speed, Delay, and Travel Time")
+            with st.expander("TAB 1️⃣ Controls", expanded=False):
+                st.caption("Analysis Variables: Speed, Delay, and Travel Time")
 
             # O-D mode (origin → destination) replaces segment picker
             od_mode = st.checkbox(
