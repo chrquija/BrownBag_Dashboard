@@ -212,8 +212,8 @@ with tab1:
             st.image("Logos/CV Sync__.jpg", width=205)
 
             # Controls
-            with st.expander("TAB 1️⃣ Controls", expanded=False):
-                st.caption("Analysis Variables: Speed, Delay, and Travel Time")
+            with st.expander("TAB 1️⃣ CONTROLS", expanded=False):
+                st.caption("Variables: Speed, Delay, and Travel Time")
 
                 # O-D mode (origin → destination) replaces segment picker
                 od_mode = st.checkbox(
@@ -577,7 +577,7 @@ with tab2:
 
         with st.sidebar:
             with st.expander("TAB 2️⃣ CONTROLS", expanded=False):
-                st.caption("Analysis Variables: Vehicle Volume")
+                st.caption("Variables: Vehicle Volume")
                 intersections = ["All Intersections"] + sorted(
                     volume_df["intersection_name"].dropna().unique().tolist()
                 )
