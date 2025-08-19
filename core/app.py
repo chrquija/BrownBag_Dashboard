@@ -1,4 +1,3 @@
-# app.py
 # Python
 import streamlit as st
 import pandas as pd
@@ -27,7 +26,7 @@ from sidebar_functions import (
     render_badge,
 )
 
-# Cycle length section (separate module you already have)
+# Cycle length section (moved out)
 from cycle_length_recommendations import render_cycle_length_section
 
 # =========================
@@ -41,14 +40,6 @@ st.set_page_config(
 )
 
 # =========================
-# Session defaults for last-rendered configs (one-time init)
-# =========================
-if "perf_cfg" not in st.session_state:
-    st.session_state.perf_cfg = None  # last-rendered settings for Tab 1
-if "vol_cfg" not in st.session_state:
-    st.session_state.vol_cfg = None   # last-rendered settings for Tab 2
-
-# =========================
 # Constants / Config
 # =========================
 THEORETICAL_LINK_CAPACITY_VPH = 1800
@@ -57,11 +48,11 @@ CRITICAL_DELAY_SEC = 120
 HIGH_DELAY_SEC = 60
 
 # Build ordered node list from segment_name like "A → B"
-def _build_node_order(df: pd.DataFrame) -> list:
+def _build_node_order(df: pd.DataFrame) -> list[str]:
     if df is None or df.empty or "segment_name" not in df.columns:
         return []
     segs = df["segment_name"].dropna().tolist()
-    order = []
+    order: list[str] = []
     for s in segs:
         parts = [p.strip() for p in s.split("→")]
         if len(parts) != 2:
@@ -213,125 +204,72 @@ with tab1:
                 unsafe_allow_html=True,
             )
 
-        # -----------------------------
-        # TAB 1 controls inside a FORM (Render button); plus Refresh button
-        # -----------------------------
+        # Controls
         with st.sidebar:
             with st.expander("TAB 1️⃣ Controls", expanded=False):
                 st.caption("Analysis Variables: Speed, Delay, and Travel Time")
 
-                # Build node list for O-D defaults
-                node_list = _build_node_order(corridor_df)
-                def_node_a = node_list[0] if node_list else None
-                def_node_b = node_list[-1] if node_list else None
-
-                # Seed defaults once
-                if st.session_state.perf_cfg is None:
-                    _min = corridor_df["local_datetime"].dt.date.min()
-                    _max = corridor_df["local_datetime"].dt.date.max()
-                    st.session_state.perf_cfg = {
-                        "od_mode": True,
-                        "origin": def_node_a,
-                        "destination": def_node_b,
-                        "date_range": (_min, _max),
-                        "granularity": "Hourly",
-                        "time_filter": "All Hours",
-                        "start_hour": 7,
-                        "end_hour": 18,
-                    }
-
-                with st.form("perf_form"):
-                    cfg0 = st.session_state.perf_cfg
-
-                    od_mode = st.checkbox(
-                        "Analyze Travel Time Between Points (O-D)",
-                        value=cfg0["od_mode"],
-                        help="Sum hourly travel times across consecutive segments between two points (uses dataset direction).",
-                    )
-
-                    origin = cfg0["origin"]
-                    destination = cfg0["destination"]
-                    if od_mode and len(node_list) >= 2:
+                # O-D mode (origin → destination) replaces segment picker
+                od_mode = st.checkbox(
+                    "Analyze Travel Time Between Points (O-D)",
+                    value=True,
+                    help="Sum hourly travel times across consecutive segments between two points (uses dataset direction).",
+                )
+                origin, destination = None, None
+                if od_mode:
+                    node_list = _build_node_order(corridor_df)
+                    if len(node_list) >= 2:
                         cA, cB = st.columns(2)
                         with cA:
-                            origin = st.selectbox(
-                                "Origin", node_list,
-                                index=node_list.index(origin) if origin in node_list else 0
-                            )
+                            origin = st.selectbox("Origin", node_list, index=0, key="od_origin")
                         with cB:
-                            destination = st.selectbox(
-                                "Destination", node_list,
-                                index=node_list.index(destination) if destination in node_list else len(node_list)-1
-                            )
+                            destination = st.selectbox("Destination", node_list, index=len(node_list) - 1, key="od_destination")
+                    else:
+                        st.info("Not enough nodes found to build O-D options.")
 
-                    # Date range presets
-                    min_date = corridor_df["local_datetime"].dt.date.min()
-                    max_date = corridor_df["local_datetime"].dt.date.max()
-                    st.markdown("#### 📅 Analysis Period")
-                    date_range = date_range_preset_controls(min_date, max_date, key_prefix="perf")
+                min_date = corridor_df["local_datetime"].dt.date.min()
+                max_date = corridor_df["local_datetime"].dt.date.max()
 
-                    st.markdown("#### ⏰ Analysis Settings")
-                    granularity = st.selectbox(
-                        "Data Aggregation",
-                        ["Hourly", "Daily", "Weekly", "Monthly"],
-                        index=["Hourly","Daily","Weekly","Monthly"].index(cfg0["granularity"]),
-                        key="granularity_perf",
-                        help="Higher aggregation smooths trends but may hide peaks",
+                st.markdown("#### 📅 Analysis Period")
+                date_range = date_range_preset_controls(min_date, max_date, key_prefix="perf")
+
+                st.markdown("#### ⏰ Analysis Settings")
+                granularity = st.selectbox(
+                    "Data Aggregation",
+                    ["Hourly", "Daily", "Weekly", "Monthly"],
+                    index=0,
+                    key="granularity_perf",
+                    help="Higher aggregation smooths trends but may hide peaks",
+                )
+
+                time_filter, start_hour, end_hour = None, None, None
+                if granularity == "Hourly":
+                    time_filter = st.selectbox(
+                        "Time Period Focus",
+                        [
+                            "All Hours",
+                            "Peak Hours (7–9 AM, 4–6 PM)",
+                            "AM Peak (7–9 AM)",
+                            "PM Peak (4–6 PM)",
+                            "Off-Peak",
+                            "Custom Range",
+                        ],
+                        key="time_period_focus_perf",
                     )
+                    if time_filter == "Custom Range":
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            start_hour = st.number_input("Start Hour (0–23)", 0, 23, 7, step=1, key="start_hour_perf")
+                        with c2:
+                            end_hour = st.number_input("End Hour (1–24)", 1, 24, 18, step=1, key="end_hour_perf")
 
-                    time_filter, start_hour, end_hour = None, None, None
-                    if granularity == "Hourly":
-                        time_filter = st.selectbox(
-                            "Time Period Focus",
-                            ["All Hours","Peak Hours (7–9 AM, 4–6 PM)","AM Peak (7–9 AM)","PM Peak (4–6 PM)","Off-Peak","Custom Range"],
-                            index=["All Hours","Peak Hours (7–9 AM, 4–6 PM)","AM Peak (7–9 AM)","PM Peak (4–6 PM)","Off-Peak","Custom Range"].index(cfg0["time_filter"]),
-                            key="time_period_focus_perf",
-                        )
-                        if time_filter == "Custom Range":
-                            c1, c2 = st.columns(2)
-                            with c1:
-                                start_hour = st.number_input("Start Hour (0–23)", 0, 23, cfg0["start_hour"], step=1, key="start_hour_perf")
-                            with c2:
-                                end_hour = st.number_input("End Hour (1–24)", 1, 24, cfg0["end_hour"], step=1, key="end_hour_perf")
-
-                    submitted_perf = st.form_submit_button("Render", use_container_width=True)
-
-                # Small refresh button: clears caches and re-runs with last settings
-                if st.button("🔄 Refresh", type="secondary", help="Reload data/caches and re-render with last settings", key="perf_refresh_btn"):
-                    st.cache_data.clear()
-                    st.experimental_rerun()
-
-                if submitted_perf:
-                    st.session_state.perf_cfg = {
-                        "od_mode": od_mode,
-                        "origin": origin,
-                        "destination": destination,
-                        "date_range": tuple(date_range) if isinstance(date_range, (list, tuple)) else date_range,
-                        "granularity": granularity,
-                        "time_filter": time_filter if granularity == "Hourly" else None,
-                        "start_hour": start_hour,
-                        "end_hour": end_hour,
-                    }
-
-        # -----------------------------
-        # Render Tab 1 using the last-rendered config
-        # -----------------------------
-        cfg = st.session_state.perf_cfg
-        if cfg and len(cfg["date_range"]) == 2:
-            date_range   = cfg["date_range"]
-            granularity  = cfg["granularity"]
-            time_filter  = cfg["time_filter"]
-            start_hour   = cfg["start_hour"]
-            end_hour     = cfg["end_hour"]
-            od_mode      = cfg["od_mode"]
-            origin       = cfg["origin"]
-            destination  = cfg["destination"]
-
+        # Main tab content
+        if len(date_range) == 2:
             try:
                 base_df = corridor_df.copy()
 
                 if base_df.empty:
-                    st.warning("⚠️ No data for the selected filters.")
+                    st.warning("⚠️ No data for the selected segment.")
                 else:
                     filtered_data = process_traffic_data(
                         base_df,
@@ -367,7 +305,7 @@ with tab1:
                                 else:
                                     st.info("Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path.")
 
-                        # Header banner
+                        # Big banner title (font inherits app theme)
                         st.markdown(
                             f"""
                         <div style="
@@ -392,12 +330,13 @@ with tab1:
                             unsafe_allow_html=True,
                         )
 
-                        # Build raw_data for KPIs (use O-D aggregation if available)
+                        # Build raw_data for KPIs
                         raw_data = base_df[
                             (base_df["local_datetime"].dt.date >= date_range[0])
                             & (base_df["local_datetime"].dt.date <= date_range[1])
                         ].copy()
 
+                        # If O-D aggregated data exists, use that for KPIs
                         if od_raw is not None and not od_raw.empty:
                             od_raw["average_traveltime"] = pd.to_numeric(od_raw["average_traveltime"], errors="coerce")
                             od_raw["average_delay"] = pd.to_numeric(od_raw["average_delay"], errors="coerce")
@@ -410,27 +349,53 @@ with tab1:
                                 if col in raw_data:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
 
+                            # KPI Title for Tab 1
                             st.subheader("🚦 Corridor Performance Metrics")
 
-                            # Five KPI row (interpretable + badges)
+                            # --- Five KPI row (interpretable + badges) ---
                             k = compute_perf_kpis_interpretable(raw_data, HIGH_DELAY_SEC)
 
                             c1, c2, c3, c4, c5 = st.columns(5)
+
                             with c1:
-                                st.metric("🎯 Reliability Index", f"{k['reliability']['value']:.0f}{k['reliability']['unit']}", help=k['reliability']['help'])
+                                st.metric(
+                                    "🎯 Reliability Index",
+                                    f"{k['reliability']['value']:.0f}{k['reliability']['unit']}",
+                                    help=k['reliability']['help'],
+                                )
                                 st.markdown(render_badge(k['reliability']['score']), unsafe_allow_html=True)
+
                             with c2:
-                                st.metric("⚠️ Congestion Frequency", f"{k['congestion_freq']['value']:.1f}{k['congestion_freq']['unit']}", help=k['congestion_freq']['help'])
+                                st.metric(
+                                    "⚠️ Congestion Frequency",
+                                    f"{k['congestion_freq']['value']:.1f}{k['congestion_freq']['unit']}",
+                                    help=k['congestion_freq']['help'],
+                                )
                                 st.caption(k['congestion_freq'].get('extra', ''))
                                 st.markdown(render_badge(k['congestion_freq']['score']), unsafe_allow_html=True)
+
                             with c3:
-                                st.metric("⏱️ Average Travel Time", f"{k['avg_tt']['value']:.1f} {k['avg_tt']['unit']}", help=k['avg_tt']['help'])
+                                st.metric(
+                                    "⏱️ Average Travel Time",
+                                    f"{k['avg_tt']['value']:.1f} {k['avg_tt']['unit']}",
+                                    help=k['avg_tt']['help'],
+                                )
                                 st.markdown(render_badge(k['avg_tt']['score']), unsafe_allow_html=True)
+
                             with c4:
-                                st.metric("📈 Planning Time (95th)", f"{k['planning_time']['value']:.1f} {k['planning_time']['unit']}", help=k['planning_time']['help'])
+                                st.metric(
+                                    "📈 Planning Time (95th)",
+                                    f"{k['planning_time']['value']:.1f} {k['planning_time']['unit']}",
+                                    help=k['planning_time']['help'],
+                                )
                                 st.markdown(render_badge(k['planning_time']['score']), unsafe_allow_html=True)
+
                             with c5:
-                                st.metric("🧭 Buffer Index", f"{k['buffer_index']['value']:.1f}{k['buffer_index']['unit']}", help=k['buffer_index']['help'])
+                                st.metric(
+                                    "🧭 Buffer Index",
+                                    f"{k['buffer_index']['value']:.1f}{k['buffer_index']['unit']}",
+                                    help=k['buffer_index']['help'],
+                                )
                                 st.markdown(render_badge(k['buffer_index']['score']), unsafe_allow_html=True)
 
                         if len(filtered_data) > 1:
@@ -485,7 +450,7 @@ with tab1:
                                 unsafe_allow_html=True,
                             )
 
-                        # Bottleneck analysis table
+                        st.subheader("🚨 Comprehensive Bottleneck Analysis")
                         if not raw_data.empty and "segment_name" in base_df.columns:
                             try:
                                 g = base_df[
@@ -521,9 +486,17 @@ with tab1:
 
                                 final = g[
                                     [
-                                        "segment_name","direction","🎯 Performance Rating","Bottleneck_Score",
-                                        "average_delay_mean","average_delay_max","average_traveltime_mean","average_traveltime_max",
-                                        "average_speed_mean","average_speed_min","n",
+                                        "segment_name",
+                                        "direction",
+                                        "🎯 Performance Rating",
+                                        "Bottleneck_Score",
+                                        "average_delay_mean",
+                                        "average_delay_max",
+                                        "average_traveltime_mean",
+                                        "average_traveltime_max",
+                                        "average_speed_mean",
+                                        "average_speed_min",
+                                        "n",
                                     ]
                                 ].rename(
                                     columns={
@@ -539,7 +512,6 @@ with tab1:
                                     }
                                 ).sort_values("Bottleneck_Score", ascending=False)
 
-                                st.subheader("🚨 Comprehensive Bottleneck Analysis")
                                 st.dataframe(
                                     final.head(15),
                                     use_container_width=True,
@@ -570,7 +542,7 @@ with tab1:
             except Exception as e:
                 st.error(f"❌ Error processing traffic data: {e}")
         else:
-            st.warning("⚠️ Click **Render** in the controls to generate the dashboard.")
+            st.warning("⚠️ Please select both start and end dates to proceed.")
 
 # -------------------------
 # TAB 2: Volume / Capacity
@@ -592,82 +564,33 @@ with tab2:
         progress_bar.empty()
         status_text.empty()
 
-        # -----------------------------
-        # TAB 2 controls inside a FORM (Render button); plus Refresh button
-        # -----------------------------
         with st.sidebar:
             with st.expander("TAB 2️⃣ CONTROLS", expanded=False):
                 st.caption("Analysis Variables: Vehicle Volume")
+                intersections = ["All Intersections"] + sorted(
+                    volume_df["intersection_name"].dropna().unique().tolist()
+                )
 
-                # Seed defaults once
-                if st.session_state.vol_cfg is None:
-                    _min2 = volume_df["local_datetime"].dt.date.min()
-                    _max2 = volume_df["local_datetime"].dt.date.max()
-                    st.session_state.vol_cfg = {
-                        "intersection": "All Intersections",
-                        "date_range": (_min2, _max2),
-                        "granularity": "Hourly",
-                        "direction": "All Directions",
-                    }
+                intersection = st.selectbox("🚦 Select Intersection", intersections, key="intersection_vol")
 
-                with st.form("vol_form"):
-                    cfgv0 = st.session_state.vol_cfg
+                min_date = volume_df["local_datetime"].dt.date.min()
+                max_date = volume_df["local_datetime"].dt.date.max()
 
-                    intersections = ["All Intersections"] + sorted(
-                        volume_df["intersection_name"].dropna().unique().tolist()
-                    )
-                    intersection = st.selectbox(
-                        "🚦 Select Intersection",
-                        intersections,
-                        index=intersections.index(cfgv0["intersection"]) if cfgv0["intersection"] in intersections else 0,
-                        key="intersection_vol",
-                    )
+                st.markdown("#### 📅 Analysis Period")
+                date_range_vol = date_range_preset_controls(min_date, max_date, key_prefix="vol")
 
-                    min_date = volume_df["local_datetime"].dt.date.min()
-                    max_date = volume_df["local_datetime"].dt.date.max()
-                    st.markdown("#### 📅 Analysis Period")
-                    date_range_vol = date_range_preset_controls(min_date, max_date, key_prefix="vol")
+                st.markdown("#### ⏰ Analysis Settings")
+                granularity_vol = st.selectbox(
+                    "Data Aggregation",
+                    ["Hourly", "Daily", "Weekly", "Monthly"],
+                    index=0,
+                    key="granularity_vol",
+                )
 
-                    st.markdown("#### ⏰ Analysis Settings")
-                    granularity_vol = st.selectbox(
-                        "Data Aggregation",
-                        ["Hourly", "Daily", "Weekly", "Monthly"],
-                        index=["Hourly","Daily","Weekly","Monthly"].index(cfgv0["granularity"]),
-                        key="granularity_vol",
-                    )
+                direction_options = ["All Directions"] + sorted(volume_df["direction"].dropna().unique().tolist())
+                direction_filter = st.selectbox("🔄 Direction Filter", direction_options, key="direction_filter_vol")
 
-                    direction_options = ["All Directions"] + sorted(volume_df["direction"].dropna().unique().tolist())
-                    direction_filter = st.selectbox(
-                        "🔄 Direction Filter",
-                        direction_options,
-                        index=direction_options.index(cfgv0["direction"]) if cfgv0["direction"] in direction_options else 0,
-                        key="direction_filter_vol",
-                    )
-
-                    submitted_vol = st.form_submit_button("Render", use_container_width=True)
-
-                if st.button("🔄 Refresh", type="secondary", help="Reload data/caches and re-render with last settings", key="vol_refresh_btn"):
-                    st.cache_data.clear()
-                    st.experimental_rerun()
-
-                if submitted_vol:
-                    st.session_state.vol_cfg = {
-                        "intersection": intersection,
-                        "date_range": tuple(date_range_vol) if isinstance(date_range_vol, (list, tuple)) else date_range_vol,
-                        "granularity": granularity_vol,
-                        "direction": direction_filter,
-                    }
-
-        # -----------------------------
-        # Render Tab 2 using the last-rendered config
-        # -----------------------------
-        vcfg = st.session_state.vol_cfg
-        if vcfg and len(vcfg["date_range"]) == 2:
-            intersection     = vcfg["intersection"]
-            date_range_vol   = vcfg["date_range"]
-            granularity_vol  = vcfg["granularity"]
-            direction_filter = vcfg["direction"]
-
+        if len(date_range_vol) == 2:
             try:
                 base_df = volume_df.copy()
                 if intersection != "All Intersections":
@@ -891,9 +814,17 @@ with tab2:
 
                             final = g[
                                 [
-                                    "intersection_name","direction","⚠️ Risk Level","🎯 Action Priority","🚨 Risk Score",
-                                    "Peak_Capacity_Util","Avg_Capacity_Util","total_volume_mean","total_volume_max",
-                                    "Peak_Avg_Ratio","total_volume_count",
+                                    "intersection_name",
+                                    "direction",
+                                    "⚠️ Risk Level",
+                                    "🎯 Action Priority",
+                                    "🚨 Risk Score",
+                                    "Peak_Capacity_Util",
+                                    "Avg_Capacity_Util",
+                                    "total_volume_mean",
+                                    "total_volume_max",
+                                    "Peak_Avg_Ratio",
+                                    "total_volume_count",
                                 ]
                             ].rename(
                                 columns={
@@ -942,14 +873,14 @@ with tab2:
                             ).reset_index().sort_values("Peak", ascending=False)
                             st.dataframe(simple, use_container_width=True)
 
-                        # Cycle Length Recommendations section (your module)
+                        # Cycle Length Recommendations section (moved to separate module)
                         render_cycle_length_section(raw)
 
             except Exception as e:
                 st.error(f"❌ Error processing volume data: {e}")
                 st.info("Please check your data sources and try again.")
         else:
-            st.warning("⚠️ Click **Render** in the controls to generate the dashboard.")
+            st.warning("⚠️ Please select both start and end dates to proceed with the volume analysis.")
 
 # =========================
 # FOOTER (force subtitle + copyright to white in dark mode)
@@ -1020,7 +951,7 @@ FOOTER = """
 
     let r=255,g=255,b=255;
     if (bgColor.startsWith('rgb')) {
-      const m = bgColor.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);
+      const m = bgColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
       if (m) { r = parseInt(m[1]); g = parseInt(m[2]); b = parseInt(m[3]); }
     }
     const luminance = (0.299*r + 0.587*g + 0.114*b) / 255;
