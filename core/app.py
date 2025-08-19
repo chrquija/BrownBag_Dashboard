@@ -47,33 +47,38 @@ HIGH_VOLUME_THRESHOLD_VPH = 1200
 CRITICAL_DELAY_SEC = 120
 HIGH_DELAY_SEC = 60
 
-# Build ordered node list from segment_name like "A → B"
-def _build_node_order(df: pd.DataFrame) -> list[str]:
-    if df is None or df.empty or "segment_name" not in df.columns:
-        return []
-    segs = df["segment_name"].dropna().tolist()
+@st.cache_data(show_spinner=False)
+def get_node_order_by_direction(corridor_ids: tuple[str, ...]) -> list[str]:
+    """
+    Build ordered node list from corridor_id values like 'a_to_b' for a single direction.
+    a/b may contain underscores; we keep order based on adjacency.
+    """
     order: list[str] = []
-    for s in segs:
-        parts = [p.strip() for p in s.split("→")]
-        if len(parts) != 2:
+    for cid in corridor_ids:
+        if "_to_" not in cid:
             continue
-        a, b = parts[0], parts[1]
+        a, b = cid.split("_to_", 1)
+        a = a.replace("_", " ").strip()
+        b = b.replace("_", " ").strip()
         if not order:
-            order.append(a)
-            order.append(b)
+            order.extend([a, b])
         else:
             if order[-1] == a:
                 order.append(b)
             elif a not in order and b not in order:
-                order.append(a)
-                order.append(b)
-    # de-duplicate preserving order
+                order.extend([a, b])
     seen, out = set(), []
     for n in order:
         if n not in seen:
-            out.append(n)
-            seen.add(n)
+            out.append(n); seen.add(n)
     return out
+
+@st.cache_data(show_spinner=False)
+def build_od_series(seg_df: pd.DataFrame) -> pd.DataFrame:
+    """Sum hourly average_traveltime and average_delay across a path."""
+    if seg_df is None or seg_df.empty:
+        return pd.DataFrame(columns=["local_datetime", "average_traveltime", "average_delay"])
+    return seg_df.groupby("local_datetime", as_index=False)[["average_traveltime", "average_delay"]].sum()
 
 # =========================
 # CSS
@@ -209,15 +214,24 @@ with tab1:
             with st.expander("TAB 1️⃣ Controls", expanded=False):
                 st.caption("Analysis Variables: Speed, Delay, and Travel Time")
 
-                # O-D mode (origin → destination) replaces segment picker
+                # O-D mode with explicit direction
                 od_mode = st.checkbox(
                     "Analyze Travel Time Between Points (O-D)",
                     value=True,
-                    help="Sum hourly travel times across consecutive segments between two points (uses dataset direction).",
+                    help="Sum hourly travel times across consecutive segments between two points (uses selected direction).",
                 )
-                origin, destination = None, None
+                origin, destination, od_direction = None, None, None
                 if od_mode:
-                    node_list = _build_node_order(corridor_df)
+                    dir_options = sorted(corridor_df["direction"].dropna().unique().tolist())
+                    od_direction = st.selectbox("Direction", dir_options, index=0, key="od_direction")
+
+                    dir_ids = tuple(
+                        corridor_df.loc[corridor_df["direction"] == od_direction, "corridor_id"]
+                        .dropna()
+                        .tolist()
+                    )
+                    node_list = get_node_order_by_direction(dir_ids)
+
                     if len(node_list) >= 2:
                         cA, cB = st.columns(2)
                         with cA:
@@ -225,7 +239,7 @@ with tab1:
                         with cB:
                             destination = st.selectbox("Destination", node_list, index=len(node_list) - 1, key="od_destination")
                     else:
-                        st.info("Not enough nodes found to build O-D options.")
+                        st.info("Not enough nodes found to build O-D options for this direction.")
 
                 min_date = corridor_df["local_datetime"].dt.date.min()
                 max_date = corridor_df["local_datetime"].dt.date.max()
@@ -287,25 +301,28 @@ with tab1:
                         data_span = (date_range[1] - date_range[0]).days + 1
                         time_context = f" • {time_filter}" if (granularity == "Hourly" and time_filter) else ""
 
-                        # O-D computation (if enabled and valid)
+                        # O-D computation (direction-aware)
                         route_label = "All Segments"
                         od_raw = None
-                        if od_mode and origin and destination:
-                            node_order = _build_node_order(base_df)
+                        if od_mode and origin and destination and od_direction:
+                            base_df_dir = base_df[base_df["direction"] == od_direction].copy()
+                            ids_dir = tuple(base_df_dir["corridor_id"].dropna().tolist())
+                            node_order = get_node_order_by_direction(ids_dir)
                             if origin in node_order and destination in node_order:
                                 i0, i1 = node_order.index(origin), node_order.index(destination)
                                 if i0 < i1:
-                                    path_segments = [f"{node_order[i]} → {node_order[i+1]}" for i in range(i0, i1)]
-                                    seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
+                                    path_ids = [
+                                        f"{node_order[i].replace(' ', '_')}_to_{node_order[i+1].replace(' ', '_')}"
+                                        for i in range(i0, i1)
+                                    ]
+                                    seg_df = base_df_dir[base_df_dir["corridor_id"].isin(path_ids)].copy()
                                     if not seg_df.empty:
-                                        od_raw = seg_df.groupby("local_datetime", as_index=False)[
-                                            ["average_traveltime", "average_delay"]
-                                        ].sum()
-                                        route_label = f"{origin} → {destination}"
+                                        od_raw = build_od_series(seg_df)
+                                        route_label = f"{origin} → {destination} ({od_direction})"
                                 else:
-                                    st.info("Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path.")
+                                    st.info("Swap Origin and Destination to match the selected direction.")
 
-                        # Big banner title (font inherits app theme)
+                        # Big banner title
                         st.markdown(
                             f"""
                         <div style="
@@ -349,7 +366,6 @@ with tab1:
                                 if col in raw_data:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
 
-                            # KPI Title for Tab 1
                             st.subheader("🚦 Corridor Performance Metrics")
 
                             # --- Five KPI row (interpretable + badges) ---
@@ -451,7 +467,7 @@ with tab1:
                             )
 
                         st.subheader("🚨 Comprehensive Bottleneck Analysis")
-                        if not raw_data.empty and "segment_name" in base_df.columns:
+                        if "segment_name" in base_df.columns:
                             try:
                                 g = base_df[
                                     (base_df["local_datetime"].dt.date >= date_range[0])
@@ -674,7 +690,7 @@ with tab2:
                                 avg_util = (avg / THEORETICAL_LINK_CAPACITY_VPH) * 100 if THEORETICAL_LINK_CAPACITY_VPH else 0
                                 badge = "badge-good" if avg_util <= 40 else ("badge-fair" if avg_util <= 60 else "badge-poor")
                                 st.markdown(
-                                    f'<span class="performance-badge {badge}">{avg_util:.0f}% Avg Util</span>',
+                                    f'<span class="performance-badge {badge}' + f'">{avg_util:.0f}% Avg Util</span>',
                                     unsafe_allow_html=True,
                                 )
 
@@ -947,30 +963,20 @@ FOOTER = """
   function updateFooterColors() {
     const body = document.body;
     const computed = getComputedStyle(body);
-    const bgColor = computed.backgroundColor || getComputedStyle(document.documentElement).getPropertyValue('--background-color') || '#ffffff';
-
+    const bg = computed.backgroundColor || getComputedStyle(document.documentElement).getPropertyValue('--background-color') || '#ffffff';
     let r=255,g=255,b=255;
-    if (bgColor.startsWith('rgb')) {
-      const m = bgColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-      if (m) { r = parseInt(m[1]); g = parseInt(m[2]); b = parseInt(m[3]); }
+    if (bg.startsWith('rgb')) {
+      const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (m) { r=parseInt(m[1]); g=parseInt(m[2]); b=parseInt(m[3]); }
     }
-    const luminance = (0.299*r + 0.587*g + 0.114*b) / 255;
-    const isDark = luminance < 0.5;
-
+    const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
+    const isDark = lum < 0.5;
     const subtitle = document.querySelector('.footer-sub');
     const copyright = document.querySelector('.footer-copy');
     const title = document.querySelector('.footer-title');
-
     if (subtitle && copyright) {
-      if (isDark) {
-        subtitle.style.color = '#ffffff';
-        copyright.style.color = '#ffffff';
-        if (title) title.style.color = '#7ec3ff';
-      } else {
-        subtitle.style.color = '#0f2f52';
-        copyright.style.color = '#0f2f52';
-        if (title) title.style.color = '#2980b9';
-      }
+      if (isDark) { subtitle.style.color = '#ffffff'; copyright.style.color = '#ffffff'; if (title) title.style.color = '#7ec3ff'; }
+      else { subtitle.style.color = '#0f2f52'; copyright.style.color = '#0f2f52'; if (title) title.style.color = '#2980b9'; }
     }
   }
   updateFooterColors();
