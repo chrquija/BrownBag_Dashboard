@@ -143,13 +143,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Refresh button aligned to the right of the title area
-c_title_left, c_title_right = st.columns([0.78, 0.22])
-with c_title_right:
-    if st.button("🔄 Refresh", help="Clear cached data and recompute all KPIs, charts, and tables"):
-        st.cache_data.clear()
-        st.rerun()
-
 st.markdown("""
 <div style="
     font-size: 1.05rem; font-weight: 400; color: var(--text-color);
