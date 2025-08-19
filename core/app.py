@@ -143,6 +143,13 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# Refresh button aligned to the right of the title area
+c_title_left, c_title_right = st.columns([0.78, 0.22])
+with c_title_right:
+    if st.button("🔄 Refresh", help="Clear cached data and recompute all KPIs, charts, and tables"):
+        st.cache_data.clear()
+        st.rerun()
+
 st.markdown("""
 <div style="
     font-size: 1.05rem; font-weight: 400; color: var(--text-color);
@@ -271,8 +278,25 @@ with tab1:
                 if base_df.empty:
                     st.warning("⚠️ No data for the selected segment.")
                 else:
+                    # Build working_df as O-D subset (if enabled), then filter + aggregate once
+                    working_df = base_df.copy()
+                    route_label = "All Segments"
+                    if od_mode and origin and destination:
+                        node_order = _build_node_order(base_df)
+                        if origin in node_order and destination in node_order:
+                            i0, i1 = node_order.index(origin), node_order.index(destination)
+                            if i0 < i1:
+                                path_segments = [f"{node_order[i]} → {node_order[i+1]}" for i in range(i0, i1)]
+                                seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
+                                if not seg_df.empty:
+                                    working_df = seg_df.copy()
+                                    route_label = f"{origin} → {destination}"
+                            else:
+                                st.info("Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path.")
+
+                    # Apply filters/aggregation to working_df
                     filtered_data = process_traffic_data(
-                        base_df,
+                        working_df,
                         date_range,
                         granularity,
                         time_filter if granularity == "Hourly" else None,
@@ -286,24 +310,6 @@ with tab1:
                         total_records = len(filtered_data)
                         data_span = (date_range[1] - date_range[0]).days + 1
                         time_context = f" • {time_filter}" if (granularity == "Hourly" and time_filter) else ""
-
-                        # O-D computation (if enabled and valid)
-                        route_label = "All Segments"
-                        od_raw = None
-                        if od_mode and origin and destination:
-                            node_order = _build_node_order(base_df)
-                            if origin in node_order and destination in node_order:
-                                i0, i1 = node_order.index(origin), node_order.index(destination)
-                                if i0 < i1:
-                                    path_segments = [f"{node_order[i]} → {node_order[i+1]}" for i in range(i0, i1)]
-                                    seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
-                                    if not seg_df.empty:
-                                        od_raw = seg_df.groupby("local_datetime", as_index=False)[
-                                            ["average_traveltime", "average_delay"]
-                                        ].sum()
-                                        route_label = f"{origin} → {destination}"
-                                else:
-                                    st.info("Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path.")
 
                         # Big banner title
                         st.markdown(
@@ -330,29 +336,16 @@ with tab1:
                             unsafe_allow_html=True,
                         )
 
-                        # Build raw_data for KPIs
-                        raw_data = base_df[
-                            (base_df["local_datetime"].dt.date >= date_range[0])
-                            & (base_df["local_datetime"].dt.date <= date_range[1])
-                        ].copy()
-
-                        # If O-D aggregated data exists, use that for KPIs
-                        if od_raw is not None and not od_raw.empty:
-                            od_raw["average_traveltime"] = pd.to_numeric(od_raw["average_traveltime"], errors="coerce")
-                            od_raw["average_delay"] = pd.to_numeric(od_raw["average_delay"], errors="coerce")
-                            raw_data = od_raw.copy()
-
+                        # KPIs must reflect the same filtered_data used for charts
+                        raw_data = filtered_data.copy()
                         if raw_data.empty:
-                            st.info("No raw hourly data in this window.")
+                            st.info("No data in this window.")
                         else:
                             for col in ["average_delay", "average_traveltime", "average_speed"]:
                                 if col in raw_data:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
 
-                            # KPI Title for Tab 1
                             st.subheader("🚦 Corridor Performance Metrics")
-
-                            # --- Five KPI row (interpretable + badges) ---
                             k = compute_perf_kpis_interpretable(raw_data, HIGH_DELAY_SEC)
 
                             c1, c2, c3, c4, c5 = st.columns(5)
@@ -451,11 +444,11 @@ with tab1:
                             )
 
                         st.subheader("🚨 Comprehensive Bottleneck Analysis")
-                        if not raw_data.empty and "segment_name" in base_df.columns:
+                        if not raw_data.empty and "segment_name" in working_df.columns:
                             try:
-                                g = base_df[
-                                    (base_df["local_datetime"].dt.date >= date_range[0])
-                                    & (base_df["local_datetime"].dt.date <= date_range[1])
+                                g = working_df[
+                                    (working_df["local_datetime"].dt.date >= date_range[0])
+                                    & (working_df["local_datetime"].dt.date <= date_range[1])
                                 ].groupby(["segment_name", "direction"]).agg(
                                     average_delay_mean=("average_delay", "mean"),
                                     average_delay_max=("average_delay", "max"),
@@ -674,7 +667,7 @@ with tab2:
                                 avg_util = (avg / THEORETICAL_LINK_CAPACITY_VPH) * 100 if THEORETICAL_LINK_CAPACITY_VPH else 0
                                 badge = "badge-good" if avg_util <= 40 else ("badge-fair" if avg_util <= 60 else "badge-poor")
                                 st.markdown(
-                                    f'<span class="performance-badge {badge}">{avg_util:.0f}% Avg Util</span>',
+                                    f'<span class="performance-badge {badge}' + f'">{avg_util:.0f}% Avg Util</span>',
                                     unsafe_allow_html=True,
                                 )
 
