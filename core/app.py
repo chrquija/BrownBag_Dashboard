@@ -75,6 +75,58 @@ def _build_node_order(df: pd.DataFrame) -> list[str]:
             seen.add(n)
     return out
 
+# Build a master ordered node list from ALL directions using corridor_id like "a_to_b"
+def _get_master_node_order(df: pd.DataFrame) -> list[str]:
+    if df is None or df.empty or "corridor_id" not in df.columns:
+        return []
+    ids = df["corridor_id"].dropna().astype(str).tolist()
+    edges = []
+    indeg, outdeg = {}, {}
+    for cid in ids:
+        if "_to_" not in cid:
+            continue
+        a, b = cid.split("_to_", 1)
+        a = a.replace("_", " ").strip()
+        b = b.replace("_", " ").strip()
+        edges.append((a, b))
+        outdeg[a] = outdeg.get(a, 0) + 1
+        indeg[b] = indeg.get(b, 0) + 1
+        indeg.setdefault(a, 0)
+        outdeg.setdefault(b, outdeg.get(b, 0))
+    if not edges:
+        return []
+    # choose start with outdeg - indeg = 1, else first edge's left
+    start = ""
+    for n in outdeg.keys():
+        if outdeg.get(n, 0) - indeg.get(n, 0) == 1:
+            start = n
+            break
+    if not start:
+        start = edges[0][0]
+    # walk chain
+    order = [start]
+    used = set()
+    current = start
+    progressed = True
+    while progressed and len(used) < len(edges):
+        progressed = False
+        for i, (a, b) in enumerate(edges):
+            if i in used:
+                continue
+            if a == current:
+                order.append(b)
+                used.add(i)
+                current = b
+                progressed = True
+                break
+    # de-duplicate preserving order
+    seen, out = set(), []
+    for n in order:
+        if n not in seen:
+            out.append(n)
+            seen.add(n)
+    return out
+
 # =========================
 # CSS
 # =========================
@@ -213,11 +265,12 @@ with tab1:
                 od_mode = st.checkbox(
                     "Analyze Travel Time Between Points (O-D)",
                     value=True,
-                    help="Sum hourly travel times across consecutive segments between two points (uses dataset direction).",
+                    help="Pick Origin and Destination; direction is inferred from their order along the corridor.",
                 )
                 origin, destination = None, None
                 if od_mode:
-                    node_list = _build_node_order(corridor_df)
+                    # Always show the full corridor node list (both directions combined)
+                    node_list = _get_master_node_order(corridor_df)
                     if len(node_list) >= 2:
                         cA, cB = st.columns(2)
                         with cA:
@@ -287,23 +340,40 @@ with tab1:
                         data_span = (date_range[1] - date_range[0]).days + 1
                         time_context = f" • {time_filter}" if (granularity == "Hourly" and time_filter) else ""
 
-                        # O-D computation (if enabled and valid)
+                        # O-D computation (auto-infer NB/SB from Origin/Destination)
                         route_label = "All Segments"
                         od_raw = None
                         if od_mode and origin and destination:
-                            node_order = _build_node_order(base_df)
-                            if origin in node_order and destination in node_order:
+                            master_nodes = _get_master_node_order(base_df)
+                            if origin not in master_nodes or destination not in master_nodes:
+                                st.info("Selected Origin/Destination are not in the corridor list.")
+                            elif origin == destination:
+                                st.info("Origin and Destination are the same; pick two different nodes.")
+                            else:
+                                i_orig = master_nodes.index(origin)
+                                i_dest = master_nodes.index(destination)
+                                inferred_dir = "NB" if i_orig < i_dest else "SB"
+
+                                # Use forward/reversed master list to build the path sequence
+                                node_order = master_nodes if inferred_dir == "NB" else list(reversed(master_nodes))
                                 i0, i1 = node_order.index(origin), node_order.index(destination)
                                 if i0 < i1:
-                                    path_segments = [f"{node_order[i]} → {node_order[i+1]}" for i in range(i0, i1)]
-                                    seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
+                                    path_ids = [
+                                        f"{node_order[i].replace(' ', '_')}_to_{node_order[i+1].replace(' ', '_')}"
+                                        for i in range(i0, i1)
+                                    ]
+                                    # Use only rows for the inferred direction for summation
+                                    base_df_dir = base_df[base_df["direction"] == inferred_dir].copy()
+                                    seg_df = base_df_dir[base_df_dir["corridor_id"].isin(path_ids)].copy()
                                     if not seg_df.empty:
                                         od_raw = seg_df.groupby("local_datetime", as_index=False)[
                                             ["average_traveltime", "average_delay"]
                                         ].sum()
-                                        route_label = f"{origin} → {destination}"
+                                        route_label = f"{origin} → {destination} ({inferred_dir})"
+                                    else:
+                                        st.info(f"No data rows found for {inferred_dir} on the selected path. Verify data availability and corridor_id spelling.")
                                 else:
-                                    st.info("Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path.")
+                                    st.info("Swap Origin and Destination to define a forward path along the corridor.")
 
                         # Big banner title (font inherits app theme)
                         st.markdown(
@@ -674,7 +744,7 @@ with tab2:
                                 avg_util = (avg / THEORETICAL_LINK_CAPACITY_VPH) * 100 if THEORETICAL_LINK_CAPACITY_VPH else 0
                                 badge = "badge-good" if avg_util <= 40 else ("badge-fair" if avg_util <= 60 else "badge-poor")
                                 st.markdown(
-                                    f'<span class="performance-badge {badge}">{avg_util:.0f}% Avg Util</span>',
+                                    f'<span class="performance-badge {badge}' + f'">{avg_util:.0f}% Avg Util</span>',
                                     unsafe_allow_html=True,
                                 )
 
