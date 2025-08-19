@@ -23,7 +23,7 @@ from sidebar_functions import (
     volume_charts,
     date_range_preset_controls,
     compute_perf_kpis_interpretable,
-    render_badge
+    render_badge,
 )
 
 # Cycle length section (moved out)
@@ -46,6 +46,34 @@ THEORETICAL_LINK_CAPACITY_VPH = 1800
 HIGH_VOLUME_THRESHOLD_VPH = 1200
 CRITICAL_DELAY_SEC = 120
 HIGH_DELAY_SEC = 60
+
+# Build ordered node list from segment_name like "A → B"
+def _build_node_order(df: pd.DataFrame) -> list[str]:
+    if df is None or df.empty or "segment_name" not in df.columns:
+        return []
+    segs = df["segment_name"].dropna().tolist()
+    order: list[str] = []
+    for s in segs:
+        parts = [p.strip() for p in s.split("→")]
+        if len(parts) != 2:
+            continue
+        a, b = parts[0], parts[1]
+        if not order:
+            order.append(a)
+            order.append(b)
+        else:
+            if order[-1] == a:
+                order.append(b)
+            elif a not in order and b not in order:
+                order.append(a)
+                order.append(b)
+    # de-duplicate preserving order
+    seen, out = set(), []
+    for n in order:
+        if n not in seen:
+            out.append(n)
+            seen.add(n)
+    return out
 
 # =========================
 # CSS
@@ -147,7 +175,6 @@ tab1, tab2 = st.tabs(["1️⃣ ITERIS CLEARGUIDE", "2️⃣ KINETIC MOBILITY"])
 # TAB 1: Performance / Travel Time
 # -------------------------
 with tab1:
-    # (Replaces the old small header with a gradient banner AFTER we know the selected range/records)
     progress_bar = st.progress(0)
     status_text = st.empty()
     status_text.text("Loading corridor performance data...")
@@ -164,23 +191,41 @@ with tab1:
         progress_bar.empty()
         status_text.empty()
 
+        # Sidebar logos + divider
         with st.sidebar:
-            st.image("Logos/ACE-logo-HiRes.jpg", width=210)
-            st.image("Logos/CV Sync__.jpg", width=205)
             st.markdown(
-                "<hr style='border:0;height:1px;background:rgba(79,172,254,.35);margin:10px 0 8px;'>",
+                """
+                <div style="display:flex;justify-content:center;align-items:center;gap:12px;margin:6px 0 8px;">
+                  <img src="Logos/ACE-logo-HiRes.jpg" alt="ADVANTEC Logo" style="height:30px;">
+                  <img src="Logos/CV Sync__.jpg" alt="CV SYNC Logo" style="height:30px;">
+                </div>
+                <hr style="border:0;height:1px;background:rgba(79,172,254,.35);margin:8px 0 10px;">
+                """,
                 unsafe_allow_html=True,
             )
 
+        # Controls
         with st.sidebar:
             with st.expander("TAB 1️⃣ Controls", expanded=False):
                 st.caption("Analysis Variables: Speed, Delay, and Travel Time")
-                seg_options = ["All Segments"] + sorted(corridor_df["segment_name"].dropna().unique().tolist())
-                corridor = st.selectbox(
-                    "🛣️ Select Corridor Segment",
-                    seg_options,
-                    help="Choose a specific segment or analyze all segments",
+
+                # O-D mode (origin → destination) replaces segment picker
+                od_mode = st.checkbox(
+                    "Analyze Travel Time Between Points (O-D)",
+                    value=True,
+                    help="Sum hourly travel times across consecutive segments between two points (uses dataset direction).",
                 )
+                origin, destination = None, None
+                if od_mode:
+                    node_list = _build_node_order(corridor_df)
+                    if len(node_list) >= 2:
+                        cA, cB = st.columns(2)
+                        with cA:
+                            origin = st.selectbox("Origin", node_list, index=0, key="od_origin")
+                        with cB:
+                            destination = st.selectbox("Destination", node_list, index=len(node_list) - 1, key="od_destination")
+                    else:
+                        st.info("Not enough nodes found to build O-D options.")
 
                 min_date = corridor_df["local_datetime"].dt.date.min()
                 max_date = corridor_df["local_datetime"].dt.date.max()
@@ -218,11 +263,10 @@ with tab1:
                         with c2:
                             end_hour = st.number_input("End Hour (1–24)", 1, 24, 18, step=1, key="end_hour_perf")
 
+        # Main tab content
         if len(date_range) == 2:
             try:
                 base_df = corridor_df.copy()
-                if corridor != "All Segments":
-                    base_df = base_df[base_df["segment_name"] == corridor]
 
                 if base_df.empty:
                     st.warning("⚠️ No data for the selected segment.")
@@ -243,20 +287,38 @@ with tab1:
                         data_span = (date_range[1] - date_range[0]).days + 1
                         time_context = f" • {time_filter}" if (granularity == "Hourly" and time_filter) else ""
 
-                        # REPLACED: Big gradient title with same info (corridor, date span, aggregation, records)
+                        # O-D computation (if enabled and valid)
+                        route_label = "All Segments"
+                        od_raw = None
+                        if od_mode and origin and destination:
+                            node_order = _build_node_order(base_df)
+                            if origin in node_order and destination in node_order:
+                                i0, i1 = node_order.index(origin), node_order.index(destination)
+                                if i0 < i1:
+                                    path_segments = [f"{node_order[i]} → {node_order[i+1]}" for i in range(i0, i1)]
+                                    seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
+                                    if not seg_df.empty:
+                                        od_raw = seg_df.groupby("local_datetime", as_index=False)[
+                                            ["average_traveltime", "average_delay"]
+                                        ].sum()
+                                        route_label = f"{origin} → {destination}"
+                                else:
+                                    st.info("Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path.")
+
+                        # Big banner title (font inherits app theme)
                         st.markdown(
                             f"""
                         <div style="
                             background: linear-gradient(135deg, #2b77e5 0%, #19c3e6 100%);
                             border-radius:16px; padding:18px 20px; color:#fff; margin:8px 0 14px;
                             box-shadow:0 10px 26px rgba(25,115,210,.25); text-align:left;
-                            font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+                            font-family: inherit;">
                           <div style="display:flex; align-items:center; gap:10px;">
                             <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.18);
                                         display:flex;align-items:center;justify-content:center;
                                         box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);">📊</div>
                             <div style="font-size:1.9rem;font-weight:800;letter-spacing:.2px;">
-                              {corridor}
+                              Travel Time Analysis: {route_label}
                             </div>
                           </div>
                           <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
@@ -268,10 +330,17 @@ with tab1:
                             unsafe_allow_html=True,
                         )
 
+                        # Build raw_data for KPIs
                         raw_data = base_df[
                             (base_df["local_datetime"].dt.date >= date_range[0])
                             & (base_df["local_datetime"].dt.date <= date_range[1])
                         ].copy()
+
+                        # If O-D aggregated data exists, use that for KPIs
+                        if od_raw is not None and not od_raw.empty:
+                            od_raw["average_traveltime"] = pd.to_numeric(od_raw["average_traveltime"], errors="coerce")
+                            od_raw["average_delay"] = pd.to_numeric(od_raw["average_delay"], errors="coerce")
+                            raw_data = od_raw.copy()
 
                         if raw_data.empty:
                             st.info("No raw hourly data in this window.")
@@ -280,7 +349,7 @@ with tab1:
                                 if col in raw_data:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
 
-                            #KPI Title for Tab 1
+                            # KPI Title for Tab 1
                             st.subheader("🚦 Corridor Performance Metrics")
 
                             # --- Five KPI row (interpretable + badges) ---
@@ -344,28 +413,28 @@ with tab1:
                         if not raw_data.empty:
                             worst_delay = (
                                 float(np.nanmax(raw_data["average_delay"]))
-                                if raw_data["average_delay"].notna().any()
+                                if "average_delay" in raw_data and raw_data["average_delay"].notna().any()
                                 else 0.0
                             )
                             avg_tt = (
                                 float(np.nanmean(raw_data["average_traveltime"]))
-                                if raw_data["average_traveltime"].notna().any()
+                                if "average_traveltime" in raw_data and raw_data["average_traveltime"].notna().any()
                                 else 0.0
                             )
                             worst_tt = (
                                 float(np.nanmax(raw_data["average_traveltime"]))
-                                if raw_data["average_traveltime"].notna().any()
+                                if "average_traveltime" in raw_data and raw_data["average_traveltime"].notna().any()
                                 else 0.0
                             )
                             tt_delta = ((worst_tt - avg_tt) / avg_tt * 100) if avg_tt > 0 else 0
-                            if avg_tt > 0:
+                            if avg_tt > 0 and "average_traveltime" in raw_data:
                                 cv_tt = float(np.nanstd(raw_data["average_traveltime"]) / avg_tt) * 100
                             else:
                                 cv_tt = 0.0
                             reliability = max(0, 100 - cv_tt)
                             high_delay_pct = (
                                 (raw_data["average_delay"] > HIGH_DELAY_SEC).mean() * 100
-                                if raw_data["average_delay"].notna().any()
+                                if "average_delay" in raw_data and raw_data["average_delay"].notna().any()
                                 else 0.0
                             )
                             st.markdown(
@@ -382,9 +451,12 @@ with tab1:
                             )
 
                         st.subheader("🚨 Comprehensive Bottleneck Analysis")
-                        if not raw_data.empty:
+                        if not raw_data.empty and "segment_name" in base_df.columns:
                             try:
-                                g = raw_data.groupby(["segment_name", "direction"]).agg(
+                                g = base_df[
+                                    (base_df["local_datetime"].dt.date >= date_range[0])
+                                    & (base_df["local_datetime"].dt.date <= date_range[1])
+                                ].groupby(["segment_name", "direction"]).agg(
                                     average_delay_mean=("average_delay", "mean"),
                                     average_delay_max=("average_delay", "max"),
                                     average_traveltime_mean=("average_traveltime", "mean"),
@@ -537,7 +609,6 @@ with tab2:
                         span = (date_range_vol[1] - date_range_vol[0]).days + 1
                         total_obs = len(filtered_volume_data)
 
-                        # REPLACED: Big gradient title with same info (intersection, dates, aggregation, observations, direction)
                         st.markdown(
                             f"""
                         <div style="
