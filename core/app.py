@@ -47,54 +47,26 @@ HIGH_VOLUME_THRESHOLD_VPH = 1200
 CRITICAL_DELAY_SEC = 120
 HIGH_DELAY_SEC = 60
 
-# Build ordered node list for a specific direction using corridor_id like "a_to_b"
-def _get_node_order_by_direction(df: pd.DataFrame, direction: str) -> list[str]:
-    if df is None or df.empty or "corridor_id" not in df.columns or "direction" not in df.columns:
+# Build ordered node list from segment_name like "A → B"
+def _build_node_order(df: pd.DataFrame) -> list[str]:
+    if df is None or df.empty or "segment_name" not in df.columns:
         return []
-    ids = (
-        df.loc[df["direction"] == direction, "corridor_id"]
-        .dropna()
-        .astype(str)
-        .tolist()
-    )
-    edges = []
-    indeg, outdeg = {}, {}
-    for cid in ids:
-        if "_to_" not in cid:
+    segs = df["segment_name"].dropna().tolist()
+    order: list[str] = []
+    for s in segs:
+        parts = [p.strip() for p in s.split("→")]
+        if len(parts) != 2:
             continue
-        a, b = cid.split("_to_", 1)
-        a = a.replace("_", " ").strip()
-        b = b.replace("_", " ").strip()
-        edges.append((a, b))
-        outdeg[a] = outdeg.get(a, 0) + 1
-        indeg[b] = indeg.get(b, 0) + 1
-        indeg.setdefault(a, 0)
-        outdeg.setdefault(b, outdeg.get(b, 0))
-    if not edges:
-        return []
-    # pick start where outdeg - indeg = 1 else left node of first edge
-    start = ""
-    for n in outdeg.keys():
-        if outdeg.get(n, 0) - indeg.get(n, 0) == 1:
-            start = n
-            break
-    if not start:
-        start = edges[0][0]
-    order = [start]
-    used = set()
-    current = start
-    progressed = True
-    while progressed:
-        progressed = False
-        for i, (a, b) in enumerate(edges):
-            if i in used:
-                continue
-            if a == current:
+        a, b = parts[0], parts[1]
+        if not order:
+            order.append(a)
+            order.append(b)
+        else:
+            if order[-1] == a:
                 order.append(b)
-                used.add(i)
-                current = b
-                progressed = True
-                break
+            elif a not in order and b not in order:
+                order.append(a)
+                order.append(b)
     # de-duplicate preserving order
     seen, out = set(), []
     for n in order:
@@ -237,17 +209,15 @@ with tab1:
             with st.expander("TAB 1️⃣ Controls", expanded=False):
                 st.caption("Analysis Variables: Speed, Delay, and Travel Time")
 
-                # O-D mode with explicit direction
+                # O-D mode (origin → destination) replaces segment picker
                 od_mode = st.checkbox(
                     "Analyze Travel Time Between Points (O-D)",
                     value=True,
-                    help="Sum hourly travel times across consecutive segments between two points (uses selected direction).",
+                    help="Sum hourly travel times across consecutive segments between two points (uses dataset direction).",
                 )
-                origin, destination, od_direction = None, None, None
+                origin, destination = None, None
                 if od_mode:
-                    dir_options = sorted(corridor_df["direction"].dropna().unique().tolist())
-                    od_direction = st.selectbox("Direction", dir_options, index=0, key="od_direction")
-                    node_list = _get_node_order_by_direction(corridor_df, od_direction)
+                    node_list = _build_node_order(corridor_df)
                     if len(node_list) >= 2:
                         cA, cB = st.columns(2)
                         with cA:
@@ -255,7 +225,7 @@ with tab1:
                         with cB:
                             destination = st.selectbox("Destination", node_list, index=len(node_list) - 1, key="od_destination")
                     else:
-                        st.info("Not enough nodes found to build O‑D options for this direction.")
+                        st.info("Not enough nodes found to build O-D options.")
 
                 min_date = corridor_df["local_datetime"].dt.date.min()
                 max_date = corridor_df["local_datetime"].dt.date.max()
@@ -317,31 +287,25 @@ with tab1:
                         data_span = (date_range[1] - date_range[0]).days + 1
                         time_context = f" • {time_filter}" if (granularity == "Hourly" and time_filter) else ""
 
-                        # O-D computation (direction-aware)
+                        # O-D computation (if enabled and valid)
                         route_label = "All Segments"
                         od_raw = None
-                        if od_mode and origin and destination and od_direction:
-                            base_df_dir = base_df[base_df["direction"] == od_direction].copy()
-                            node_order = _get_node_order_by_direction(base_df_dir, od_direction)
+                        if od_mode and origin and destination:
+                            node_order = _build_node_order(base_df)
                             if origin in node_order and destination in node_order:
                                 i0, i1 = node_order.index(origin), node_order.index(destination)
                                 if i0 < i1:
-                                    path_ids = [
-                                        f"{node_order[i].replace(' ', '_')}_to_{node_order[i+1].replace(' ', '_')}"
-                                        for i in range(i0, i1)
-                                    ]
-                                    seg_df = base_df_dir[base_df_dir["corridor_id"].isin(path_ids)].copy()
+                                    path_segments = [f"{node_order[i]} → {node_order[i+1]}" for i in range(i0, i1)]
+                                    seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
                                     if not seg_df.empty:
-                                        od_raw = (
-                                            seg_df.groupby("local_datetime", as_index=False)[
-                                                ["average_traveltime", "average_delay"]
-                                            ].sum()
-                                        )
-                                        route_label = f"{origin} → {destination} ({od_direction})"
+                                        od_raw = seg_df.groupby("local_datetime", as_index=False)[
+                                            ["average_traveltime", "average_delay"]
+                                        ].sum()
+                                        route_label = f"{origin} → {destination}"
                                 else:
-                                    st.info("Swap Origin and Destination to match the selected direction.")
+                                    st.info("Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path.")
 
-                        # Big banner title
+                        # Big banner title (font inherits app theme)
                         st.markdown(
                             f"""
                         <div style="
@@ -385,6 +349,7 @@ with tab1:
                                 if col in raw_data:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
 
+                            # KPI Title for Tab 1
                             st.subheader("🚦 Corridor Performance Metrics")
 
                             # --- Five KPI row (interpretable + badges) ---
@@ -486,7 +451,7 @@ with tab1:
                             )
 
                         st.subheader("🚨 Comprehensive Bottleneck Analysis")
-                        if "segment_name" in base_df.columns:
+                        if not raw_data.empty and "segment_name" in base_df.columns:
                             try:
                                 g = base_df[
                                     (base_df["local_datetime"].dt.date >= date_range[0])
@@ -709,7 +674,7 @@ with tab2:
                                 avg_util = (avg / THEORETICAL_LINK_CAPACITY_VPH) * 100 if THEORETICAL_LINK_CAPACITY_VPH else 0
                                 badge = "badge-good" if avg_util <= 40 else ("badge-fair" if avg_util <= 60 else "badge-poor")
                                 st.markdown(
-                                    f'<span class="performance-badge {badge}' + f'">{avg_util:.0f}% Avg Util</span>',
+                                    f'<span class="performance-badge {badge}">{avg_util:.0f}% Avg Util</span>',
                                     unsafe_allow_html=True,
                                 )
 
@@ -982,20 +947,30 @@ FOOTER = """
   function updateFooterColors() {
     const body = document.body;
     const computed = getComputedStyle(body);
-    const bg = computed.backgroundColor || getComputedStyle(document.documentElement).getPropertyValue('--background-color') || '#ffffff';
+    const bgColor = computed.backgroundColor || getComputedStyle(document.documentElement).getPropertyValue('--background-color') || '#ffffff';
+
     let r=255,g=255,b=255;
-    if (bg.startsWith('rgb')) {
-      const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-      if (m) { r=parseInt(m[1]); g=parseInt(m[2]); b=parseInt(m[3]); }
+    if (bgColor.startsWith('rgb')) {
+      const m = bgColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (m) { r = parseInt(m[1]); g = parseInt(m[2]); b = parseInt(m[3]); }
     }
-    const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
-    const isDark = lum < 0.5;
+    const luminance = (0.299*r + 0.587*g + 0.114*b) / 255;
+    const isDark = luminance < 0.5;
+
     const subtitle = document.querySelector('.footer-sub');
     const copyright = document.querySelector('.footer-copy');
     const title = document.querySelector('.footer-title');
+
     if (subtitle && copyright) {
-      if (isDark) { subtitle.style.color = '#ffffff'; copyright.style.color = '#ffffff'; if (title) title.style.color = '#7ec3ff'; }
-      else { subtitle.style.color = '#0f2f52'; copyright.style.color = '#0f2f52'; if (title) title.style.color = '#2980b9'; }
+      if (isDark) {
+        subtitle.style.color = '#ffffff';
+        copyright.style.color = '#ffffff';
+        if (title) title.style.color = '#7ec3ff';
+      } else {
+        subtitle.style.color = '#0f2f52';
+        copyright.style.color = '#0f2f52';
+        if (title) title.style.color = '#2980b9';
+      }
     }
   }
   updateFooterColors();
