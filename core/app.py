@@ -244,9 +244,6 @@ with tab1:
                             if i0 < i1:
                                 preview_segments = [f"{node_list[i]} → {node_list[i + 1]}" for i in range(i0, i1)]
                                 found = int(corridor_df["segment_name"].isin(preview_segments).sum())
-                                st.caption(f"Path preview: {found}/{len(preview_segments)} segments found in data.")
-                            else:
-                                st.caption("Path preview: reverse direction selected (no forward segments).")
                     else:
                         st.info("Not enough nodes found to build O-D options.")
 
