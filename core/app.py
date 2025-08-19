@@ -23,7 +23,7 @@ from sidebar_functions import (
     volume_charts,
     date_range_preset_controls,
     compute_perf_kpis_interpretable,
-    render_badge,
+    render_badge
 )
 
 # Cycle length section (moved out)
@@ -46,39 +46,6 @@ THEORETICAL_LINK_CAPACITY_VPH = 1800
 HIGH_VOLUME_THRESHOLD_VPH = 1200
 CRITICAL_DELAY_SEC = 120
 HIGH_DELAY_SEC = 60
-
-@st.cache_data(show_spinner=False)
-def get_node_order_by_direction(corridor_ids: tuple[str, ...]) -> list[str]:
-    """
-    Build ordered node list from corridor_id values like 'a_to_b' for a single direction.
-    a/b may contain underscores; we keep order based on adjacency.
-    """
-    order: list[str] = []
-    for cid in corridor_ids:
-        if "_to_" not in cid:
-            continue
-        a, b = cid.split("_to_", 1)
-        a = a.replace("_", " ").strip()
-        b = b.replace("_", " ").strip()
-        if not order:
-            order.extend([a, b])
-        else:
-            if order[-1] == a:
-                order.append(b)
-            elif a not in order and b not in order:
-                order.extend([a, b])
-    seen, out = set(), []
-    for n in order:
-        if n not in seen:
-            out.append(n); seen.add(n)
-    return out
-
-@st.cache_data(show_spinner=False)
-def build_od_series(seg_df: pd.DataFrame) -> pd.DataFrame:
-    """Sum hourly average_traveltime and average_delay across a path."""
-    if seg_df is None or seg_df.empty:
-        return pd.DataFrame(columns=["local_datetime", "average_traveltime", "average_delay"])
-    return seg_df.groupby("local_datetime", as_index=False)[["average_traveltime", "average_delay"]].sum()
 
 # =========================
 # CSS
@@ -180,6 +147,7 @@ tab1, tab2 = st.tabs(["1️⃣ ITERIS CLEARGUIDE", "2️⃣ KINETIC MOBILITY"])
 # TAB 1: Performance / Travel Time
 # -------------------------
 with tab1:
+    # (Replaces the old small header with a gradient banner AFTER we know the selected range/records)
     progress_bar = st.progress(0)
     status_text = st.empty()
     status_text.text("Loading corridor performance data...")
@@ -196,50 +164,23 @@ with tab1:
         progress_bar.empty()
         status_text.empty()
 
-        # Sidebar logos + divider
         with st.sidebar:
+            st.image("Logos/ACE-logo-HiRes.jpg", width=210)
+            st.image("Logos/CV Sync__.jpg", width=205)
             st.markdown(
-                """
-                <div style="display:flex;justify-content:center;align-items:center;gap:12px;margin:6px 0 8px;">
-                  <img src="Logos/ACE-logo-HiRes.jpg" alt="ADVANTEC Logo" style="height:30px;">
-                  <img src="Logos/CV Sync__.jpg" alt="CV SYNC Logo" style="height:30px;">
-                </div>
-                <hr style="border:0;height:1px;background:rgba(79,172,254,.35);margin:8px 0 10px;">
-                """,
+                "<hr style='border:0;height:1px;background:rgba(79,172,254,.35);margin:10px 0 8px;'>",
                 unsafe_allow_html=True,
             )
 
-        # Controls
         with st.sidebar:
             with st.expander("TAB 1️⃣ Controls", expanded=False):
                 st.caption("Analysis Variables: Speed, Delay, and Travel Time")
-
-                # O-D mode with explicit direction
-                od_mode = st.checkbox(
-                    "Analyze Travel Time Between Points (O-D)",
-                    value=True,
-                    help="Sum hourly travel times across consecutive segments between two points (uses selected direction).",
+                seg_options = ["All Segments"] + sorted(corridor_df["segment_name"].dropna().unique().tolist())
+                corridor = st.selectbox(
+                    "🛣️ Select Corridor Segment",
+                    seg_options,
+                    help="Choose a specific segment or analyze all segments",
                 )
-                origin, destination, od_direction = None, None, None
-                if od_mode:
-                    dir_options = sorted(corridor_df["direction"].dropna().unique().tolist())
-                    od_direction = st.selectbox("Direction", dir_options, index=0, key="od_direction")
-
-                    dir_ids = tuple(
-                        corridor_df.loc[corridor_df["direction"] == od_direction, "corridor_id"]
-                        .dropna()
-                        .tolist()
-                    )
-                    node_list = get_node_order_by_direction(dir_ids)
-
-                    if len(node_list) >= 2:
-                        cA, cB = st.columns(2)
-                        with cA:
-                            origin = st.selectbox("Origin", node_list, index=0, key="od_origin")
-                        with cB:
-                            destination = st.selectbox("Destination", node_list, index=len(node_list) - 1, key="od_destination")
-                    else:
-                        st.info("Not enough nodes found to build O-D options for this direction.")
 
                 min_date = corridor_df["local_datetime"].dt.date.min()
                 max_date = corridor_df["local_datetime"].dt.date.max()
@@ -277,10 +218,11 @@ with tab1:
                         with c2:
                             end_hour = st.number_input("End Hour (1–24)", 1, 24, 18, step=1, key="end_hour_perf")
 
-        # Main tab content
         if len(date_range) == 2:
             try:
                 base_df = corridor_df.copy()
+                if corridor != "All Segments":
+                    base_df = base_df[base_df["segment_name"] == corridor]
 
                 if base_df.empty:
                     st.warning("⚠️ No data for the selected segment.")
@@ -301,41 +243,20 @@ with tab1:
                         data_span = (date_range[1] - date_range[0]).days + 1
                         time_context = f" • {time_filter}" if (granularity == "Hourly" and time_filter) else ""
 
-                        # O-D computation (direction-aware)
-                        route_label = "All Segments"
-                        od_raw = None
-                        if od_mode and origin and destination and od_direction:
-                            base_df_dir = base_df[base_df["direction"] == od_direction].copy()
-                            ids_dir = tuple(base_df_dir["corridor_id"].dropna().tolist())
-                            node_order = get_node_order_by_direction(ids_dir)
-                            if origin in node_order and destination in node_order:
-                                i0, i1 = node_order.index(origin), node_order.index(destination)
-                                if i0 < i1:
-                                    path_ids = [
-                                        f"{node_order[i].replace(' ', '_')}_to_{node_order[i+1].replace(' ', '_')}"
-                                        for i in range(i0, i1)
-                                    ]
-                                    seg_df = base_df_dir[base_df_dir["corridor_id"].isin(path_ids)].copy()
-                                    if not seg_df.empty:
-                                        od_raw = build_od_series(seg_df)
-                                        route_label = f"{origin} → {destination} ({od_direction})"
-                                else:
-                                    st.info("Swap Origin and Destination to match the selected direction.")
-
-                        # Big banner title
+                        # REPLACED: Big gradient title with same info (corridor, date span, aggregation, records)
                         st.markdown(
                             f"""
                         <div style="
                             background: linear-gradient(135deg, #2b77e5 0%, #19c3e6 100%);
                             border-radius:16px; padding:18px 20px; color:#fff; margin:8px 0 14px;
                             box-shadow:0 10px 26px rgba(25,115,210,.25); text-align:left;
-                            font-family: inherit;">
+                            font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
                           <div style="display:flex; align-items:center; gap:10px;">
                             <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.18);
                                         display:flex;align-items:center;justify-content:center;
                                         box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);">📊</div>
                             <div style="font-size:1.9rem;font-weight:800;letter-spacing:.2px;">
-                              Travel Time Analysis: {route_label}
+                              {corridor}
                             </div>
                           </div>
                           <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
@@ -347,17 +268,10 @@ with tab1:
                             unsafe_allow_html=True,
                         )
 
-                        # Build raw_data for KPIs
                         raw_data = base_df[
                             (base_df["local_datetime"].dt.date >= date_range[0])
                             & (base_df["local_datetime"].dt.date <= date_range[1])
                         ].copy()
-
-                        # If O-D aggregated data exists, use that for KPIs
-                        if od_raw is not None and not od_raw.empty:
-                            od_raw["average_traveltime"] = pd.to_numeric(od_raw["average_traveltime"], errors="coerce")
-                            od_raw["average_delay"] = pd.to_numeric(od_raw["average_delay"], errors="coerce")
-                            raw_data = od_raw.copy()
 
                         if raw_data.empty:
                             st.info("No raw hourly data in this window.")
@@ -366,6 +280,7 @@ with tab1:
                                 if col in raw_data:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
 
+                            #KPI Title for Tab 1
                             st.subheader("🚦 Corridor Performance Metrics")
 
                             # --- Five KPI row (interpretable + badges) ---
@@ -429,28 +344,28 @@ with tab1:
                         if not raw_data.empty:
                             worst_delay = (
                                 float(np.nanmax(raw_data["average_delay"]))
-                                if "average_delay" in raw_data and raw_data["average_delay"].notna().any()
+                                if raw_data["average_delay"].notna().any()
                                 else 0.0
                             )
                             avg_tt = (
                                 float(np.nanmean(raw_data["average_traveltime"]))
-                                if "average_traveltime" in raw_data and raw_data["average_traveltime"].notna().any()
+                                if raw_data["average_traveltime"].notna().any()
                                 else 0.0
                             )
                             worst_tt = (
                                 float(np.nanmax(raw_data["average_traveltime"]))
-                                if "average_traveltime" in raw_data and raw_data["average_traveltime"].notna().any()
+                                if raw_data["average_traveltime"].notna().any()
                                 else 0.0
                             )
                             tt_delta = ((worst_tt - avg_tt) / avg_tt * 100) if avg_tt > 0 else 0
-                            if avg_tt > 0 and "average_traveltime" in raw_data:
+                            if avg_tt > 0:
                                 cv_tt = float(np.nanstd(raw_data["average_traveltime"]) / avg_tt) * 100
                             else:
                                 cv_tt = 0.0
                             reliability = max(0, 100 - cv_tt)
                             high_delay_pct = (
                                 (raw_data["average_delay"] > HIGH_DELAY_SEC).mean() * 100
-                                if "average_delay" in raw_data and raw_data["average_delay"].notna().any()
+                                if raw_data["average_delay"].notna().any()
                                 else 0.0
                             )
                             st.markdown(
@@ -467,12 +382,9 @@ with tab1:
                             )
 
                         st.subheader("🚨 Comprehensive Bottleneck Analysis")
-                        if "segment_name" in base_df.columns:
+                        if not raw_data.empty:
                             try:
-                                g = base_df[
-                                    (base_df["local_datetime"].dt.date >= date_range[0])
-                                    & (base_df["local_datetime"].dt.date <= date_range[1])
-                                ].groupby(["segment_name", "direction"]).agg(
+                                g = raw_data.groupby(["segment_name", "direction"]).agg(
                                     average_delay_mean=("average_delay", "mean"),
                                     average_delay_max=("average_delay", "max"),
                                     average_traveltime_mean=("average_traveltime", "mean"),
@@ -625,6 +537,7 @@ with tab2:
                         span = (date_range_vol[1] - date_range_vol[0]).days + 1
                         total_obs = len(filtered_volume_data)
 
+                        # REPLACED: Big gradient title with same info (intersection, dates, aggregation, observations, direction)
                         st.markdown(
                             f"""
                         <div style="
@@ -690,7 +603,7 @@ with tab2:
                                 avg_util = (avg / THEORETICAL_LINK_CAPACITY_VPH) * 100 if THEORETICAL_LINK_CAPACITY_VPH else 0
                                 badge = "badge-good" if avg_util <= 40 else ("badge-fair" if avg_util <= 60 else "badge-poor")
                                 st.markdown(
-                                    f'<span class="performance-badge {badge}' + f'">{avg_util:.0f}% Avg Util</span>',
+                                    f'<span class="performance-badge {badge}">{avg_util:.0f}% Avg Util</span>',
                                     unsafe_allow_html=True,
                                 )
 
@@ -963,20 +876,30 @@ FOOTER = """
   function updateFooterColors() {
     const body = document.body;
     const computed = getComputedStyle(body);
-    const bg = computed.backgroundColor || getComputedStyle(document.documentElement).getPropertyValue('--background-color') || '#ffffff';
+    const bgColor = computed.backgroundColor || getComputedStyle(document.documentElement).getPropertyValue('--background-color') || '#ffffff';
+
     let r=255,g=255,b=255;
-    if (bg.startsWith('rgb')) {
-      const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-      if (m) { r=parseInt(m[1]); g=parseInt(m[2]); b=parseInt(m[3]); }
+    if (bgColor.startsWith('rgb')) {
+      const m = bgColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (m) { r = parseInt(m[1]); g = parseInt(m[2]); b = parseInt(m[3]); }
     }
-    const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
-    const isDark = lum < 0.5;
+    const luminance = (0.299*r + 0.587*g + 0.114*b) / 255;
+    const isDark = luminance < 0.5;
+
     const subtitle = document.querySelector('.footer-sub');
     const copyright = document.querySelector('.footer-copy');
     const title = document.querySelector('.footer-title');
+
     if (subtitle && copyright) {
-      if (isDark) { subtitle.style.color = '#ffffff'; copyright.style.color = '#ffffff'; if (title) title.style.color = '#7ec3ff'; }
-      else { subtitle.style.color = '#0f2f52'; copyright.style.color = '#0f2f52'; if (title) title.style.color = '#2980b9'; }
+      if (isDark) {
+        subtitle.style.color = '#ffffff';
+        copyright.style.color = '#ffffff';
+        if (title) title.style.color = '#7ec3ff';
+      } else {
+        subtitle.style.color = '#0f2f52';
+        copyright.style.color = '#0f2f52';
+        if (title) title.style.color = '#2980b9';
+      }
     }
   }
   updateFooterColors();
