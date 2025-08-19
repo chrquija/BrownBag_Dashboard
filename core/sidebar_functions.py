@@ -1,577 +1,1144 @@
+# app.py
 # Python
 import streamlit as st
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+import time
+import streamlit.components.v1 as components
 
-# Plotly for chart helpers
+# Plotly (figures are created in helpers; keeping imports is harmless)
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+# === External project functions ===
+from sidebar_functions import (
+    load_traffic_data,
+    load_volume_data,
+    process_traffic_data,
+    get_corridor_df,
+    get_volume_df,
+    get_performance_rating,
+    performance_chart,
+    volume_charts,
+    compute_perf_kpis_interpretable,
+    render_badge,
+)
+
+# Cycle length section (separate module you already have)
+from cycle_length_recommendations import render_cycle_length_section
 
 # =========================
-# Data loading
+# Page configuration
 # =========================
-@st.cache_data
-def load_traffic_data():
-    """
-    Load and combine all corridor traffic data from GitHub
-    """
-    data_sources = {
-        "Avenue 52 → Calle Tampico": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/1_2_LONG_NSB_Ave52_CalleTampico_WashSt_1hr_septojuly.csv",
-        "Calle Tampico → Village Shopping Ctr": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/2_3_LONG_NSB_CalleTampico_VillageShoppingCtr_WashSt_1hr_septojuly.csv",
-        "Village Shopping Ctr → Avenue 50": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/3_4_LONG_NSB_VillageShoppingCtr_Avenue50_WashSt_1hr_septojuly.csv",
-        "Avenue 50 → Sagebrush Ave": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/4_5_LONG_NSB_Ave50_SagebrushAve_WashSt_1hr_septojuly.csv",
-        "Sagebrush Ave → Eisenhower Dr": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/5_6_LONG_NSB_SagebrushAve_EisenhowerDr_WashSt_1hr_septojuly.csv",
-        "Eisenhower Dr → Avenue 48": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/6_7_LONG_NSB_EisenhowerDr_Avenue48_WashSt_1hr_septojuly.csv",
-        "Avenue 48 → Avenue 47": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/7_8_LONG_NSB_Ave48_Ave47_WashSt_1hr_septojuly.csv",
-        "Avenue 47 → Point Happy Simon": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/8_9_LONG_NSB_Ave47_PointHappySimon_WashSt_1hr_septojuly.csv",
-        "Point Happy Simon → Hwy 111": "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/DELAY_TRAVELTIME_SPEED_byintersection/LONGFORMAT/9_10_LONG_NSB_PointHappySimon_WashSt_1hr_septojuly.csv",
+st.set_page_config(
+    page_title="Active Transportation & Operations Management Dashboard",
+    page_icon="🛣️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# =========================
+# Session defaults for last-rendered configs (one-time init)
+# =========================
+if "perf_cfg" not in st.session_state:
+    st.session_state.perf_cfg = None  # last-rendered settings for Tab 1
+if "vol_cfg" not in st.session_state:
+    st.session_state.vol_cfg = None   # last-rendered settings for Tab 2
+
+# =========================
+# Constants / Config
+# =========================
+THEORETICAL_LINK_CAPACITY_VPH = 1800
+HIGH_VOLUME_THRESHOLD_VPH = 1200
+CRITICAL_DELAY_SEC = 120
+HIGH_DELAY_SEC = 60
+
+# Build ordered node list from segment_name like "A → B"
+def _build_node_order(df: pd.DataFrame) -> list:
+    if df is None or df.empty or "segment_name" not in df.columns:
+        return []
+    segs = df["segment_name"].dropna().tolist()
+    order = []
+    for s in segs:
+        parts = [p.strip() for p in s.split("→")]
+        if len(parts) != 2:
+            continue
+        a, b = parts[0], parts[1]
+        if not order:
+            order.append(a); order.append(b)
+        else:
+            if order[-1] == a:
+                order.append(b)
+            elif a not in order and b not in order:
+                order.append(a); order.append(b)
+    # de-duplicate preserving order
+    seen, out = set(), []
+    for n in order:
+        if n not in seen:
+            out.append(n); seen.add(n)
+    return out
+
+def _clamp(d: date, lo: date, hi: date) -> date:
+    return max(lo, min(hi, d))
+
+def _preset_dates(preset: str, min_d: date, max_d: date) -> tuple[date, date]:
+    # Today anchored within data bounds
+    today = date.today()
+    end = _clamp(today, min_d, max_d)
+    if preset == "Full Range":
+        return (min_d, max_d)
+    if preset == "Last 7 Days":
+        start = _clamp(end - timedelta(days=6), min_d, max_d)
+        return (start, end)
+    if preset == "Last 30 Days":
+        start = _clamp(end - timedelta(days=29), min_d, max_d)
+        return (start, end)
+    # Custom is handled by date_inputs upstream; default to full range
+    return (min_d, max_d)
+
+# =========================
+# CSS
+# =========================
+st.markdown("""
+<style>
+    .main-container {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        border-radius: 15px; padding: 2rem; margin: 1rem 0; color: white;
+        box-shadow: 0 8px 32px rgba(30, 60, 114, 0.3);
     }
-
-    all_data = []
-    for segment_name, url in data_sources.items():
-        try:
-            df = pd.read_csv(url)
-            df["segment_name"] = segment_name
-            all_data.append(df)
-        except Exception as e:
-            st.error(f"Error loading {segment_name}: {e}")
-
-    if not all_data:
-        return pd.DataFrame()
-
-    combined_df = pd.concat(all_data, ignore_index=True)
-    combined_df["local_datetime"] = pd.to_datetime(combined_df["local_datetime"])
-    combined_df = combined_df.sort_values("local_datetime").reset_index(drop=True)
-    return combined_df
-
-
-@st.cache_data
-def load_volume_data():
-    """
-    Load consolidated volume data for all Washington Street intersections
-    """
-    volume_url = "https://raw.githubusercontent.com/chrquija/ADVANTEC-ai-traffic-dashboard/refs/heads/main/VOLUME/KMOB_LONG/LONG_MASTER_Avenue52_to_Avenue47_1hr_NS_VOLUME_OctoberTOJune.csv"
-
-    try:
-        volume_df = pd.read_csv(volume_url)
-
-        volume_df["local_datetime"] = pd.to_datetime(volume_df["local_datetime"])
-        volume_df = volume_df.sort_values("local_datetime").reset_index(drop=True)
-
-        # Create proper intersection names from intersection_id
-        volume_df["intersection_name"] = (
-            volume_df["intersection_id"]
-            .str.replace("_", " ")
-            .str.replace("Washington St and ", "Washington St & ")
-            .str.replace(" and ", " & ")
-        )
-
-        # Create a sorting order for intersections (from south to north along Washington St)
-        intersection_order = {
-            "Washington St & Avenue52": 1,
-            "Washington St & Calle Tampico": 2,
-            "Washington St & Village Shop Ctr": 3,
-            "Washington St & Avenue50": 4,
-            "Washington St & Sagebrush Ave": 5,
-            "Washington St & Eisenhower": 6,
-            "Washington St & Ave48": 7,
-            "Washington St & Ave47": 8,
-        }
-
-        volume_df["sort_order"] = volume_df["intersection_name"].map(intersection_order).fillna(999)
-        volume_df = volume_df.sort_values("sort_order").drop("sort_order", axis=1)
-        return volume_df
-
-    except Exception as e:
-        st.error(f"Error loading volume data: {e}")
-        return pd.DataFrame()
-
-
-# =========================
-# Small data utilities
-# =========================
-def _safe_to_datetime(df: pd.DataFrame, col: str) -> pd.DataFrame:
-    if col in df.columns:
-        df[col] = pd.to_datetime(df[col], errors="coerce")
-    return df
-
-
-@st.cache_data(show_spinner=False)
-def get_corridor_df() -> pd.DataFrame:
-    df = load_traffic_data()
-    if df is None or len(df) == 0:
-        return pd.DataFrame()
-    df = _safe_to_datetime(df.copy(), "local_datetime")
-    needed = {"segment_name", "average_delay", "average_traveltime", "average_speed", "direction"}
-    missing = needed - set(df.columns)
-    if missing:
-        st.warning(f"Traffic dataset is missing columns: {', '.join(missing)}")
-    return df
-
-
-@st.cache_data(show_spinner=False)
-def get_volume_df() -> pd.DataFrame:
-    df = load_volume_data()
-    if df is None or len(df) == 0:
-        return pd.DataFrame()
-    df = _safe_to_datetime(df.copy(), "local_datetime")
-    needed = {"intersection_name", "total_volume", "direction"}
-    missing = needed - set(df.columns)
-    if missing:
-        st.warning(f"Volume dataset is missing columns: {', '.join(missing)}")
-    return df
-
-
-def get_performance_rating(score: float):
-    """
-    Map a 0..100 score to a label + CSS class used by the UI badges.
-    """
-    if score > 80:
-        return "🟢 Excellent", "badge-excellent"
-    if score > 60:
-        return "🔵 Good", "badge-good"
-    if score > 40:
-        return "🟡 Fair", "badge-fair"
-    if score > 20:
-        return "🟠 Poor", "badge-poor"
-    return "🔴 Critical", "badge-critical"
-
-
-# =========================
-# Interpretable KPI helpers (for Performance tab)
-# =========================
-def _coerce_num(s: pd.Series) -> pd.Series:
-    return pd.to_numeric(s, errors="coerce")
-
-
-def compute_perf_kpis_interpretable(df: pd.DataFrame, high_delay_threshold: float) -> dict:
-    """
-    Compute five interpretable KPIs:
-      - avg_tt: Average Travel Time (lower is better)
-      - planning_time: 95th percentile travel time (lower is better)
-      - buffer_index: (P95 - Mean)/Mean * 100 (lower is better)
-      - reliability: 100 - CV(travel_time)% (higher is better)
-      - congestion_freq: Share of hours with Delay > threshold (lower is better)
-
-    Returns dict with values, units, normalized 'score' 0..100 (higher = better),
-    and 'help' strings that explain formula + interpretation.
-    """
-    if df is None or df.empty:
-        return {
-            "avg_tt": {"value": 0.0, "unit": "min", "score": 50.0, "help": "Average Travel Time"},
-            "planning_time": {"value": 0.0, "unit": "min", "score": 50.0, "help": "Planning Time (95th)"},
-            "buffer_index": {"value": 0.0, "unit": "%", "score": 50.0, "help": "Buffer Index"},
-            "reliability": {"value": 0.0, "unit": "%", "score": 50.0, "help": "Reliability Index"},
-            "congestion_freq": {"value": 0.0, "unit": "%", "score": 50.0, "help": "Congestion Frequency"},
-        }
-
-    # Coerce numeric
-    for c in ("average_delay", "average_traveltime", "average_speed"):
-        if c in df:
-            df[c] = _coerce_num(df[c])
-
-    # Average TT
-    avg_tt = float(np.nanmean(df["average_traveltime"])) if "average_traveltime" in df else 0.0
-
-    # Planning time (P95)
-    if "average_traveltime" in df and df["average_traveltime"].notna().any():
-        p95_tt = float(np.nanpercentile(df["average_traveltime"].dropna(), 95))
-    else:
-        p95_tt = 0.0
-
-    # Buffer Index
-    buffer_index = ((p95_tt - avg_tt) / avg_tt * 100.0) if avg_tt > 0 else 0.0
-
-    # Reliability Index = 100 - CV%
-    if avg_tt > 0 and "average_traveltime" in df:
-        cv_tt = float(np.nanstd(df["average_traveltime"])) / avg_tt * 100.0
-    else:
-        cv_tt = 0.0
-    reliability = max(0.0, 100.0 - cv_tt)
-
-    # Congestion Frequency (% of hours with delay > threshold)
-    if "average_delay" in df and df["average_delay"].notna().any():
-        total_hours = int(df["average_delay"].count())
-        cong_hours = int((df["average_delay"] > high_delay_threshold).sum())
-        cong_freq = (cong_hours / total_hours * 100.0) if total_hours > 0 else 0.0
-    else:
-        cong_freq, cong_hours, total_hours = 0.0, 0, 0
-
-    # Normalized scores (0..100, higher = better)
-    def _minmax_score(series: pd.Series, val: float) -> float:
-        series = pd.to_numeric(series, errors="coerce").dropna()
-        if len(series) < 2:
-            return 50.0
-        mn, mx = float(series.min()), float(series.max())
-        if mx <= mn:
-            return 50.0
-        # lower is better -> invert
-        frac = (val - mn) / (mx - mn)
-        return float(max(0.0, min(100.0, 100.0 * (1.0 - frac))))
-
-    if "average_traveltime" in df and df["average_traveltime"].notna().any():
-        score_avg_tt = _minmax_score(df["average_traveltime"], avg_tt)
-        score_plan = _minmax_score(df["average_traveltime"], p95_tt)
-    else:
-        score_avg_tt = score_plan = 50.0
-
-    score_buffer = float(max(0.0, 100.0 - min(max(buffer_index, 0.0), 100.0)))
-    score_reliability = float(max(0.0, min(100.0, reliability)))
-    score_congestion = float(max(0.0, min(100.0, 100.0 - cong_freq)))
-
-    return {
-        "avg_tt": {
-            "value": avg_tt,
-            "unit": "min",
-            "score": score_avg_tt,
-            "help": "Average Travel Time\n\nFormula: mean(travel_time)\nHow to read: Lower is better; typical trip time over the selected period.",
-        },
-        "planning_time": {
-            "value": p95_tt,
-            "unit": "min",
-            "score": score_plan,
-            "help": "Planning Time (95th percentile)\n\nFormula: P95(travel_time)\nHow to read: Lower is better; time you should plan for so 95% of trips arrive on time.",
-        },
-        "buffer_index": {
-            "value": buffer_index,
-            "unit": "%",
-            "score": score_buffer,
-            "help": "Buffer Index\n\nFormula: (P95(travel_time) − mean(travel_time)) / mean(travel_time) × 100%\nHow to read: Lower is better; extra margin (percentage) needed to be on time 95% of the time.",
-        },
-        "reliability": {
-            "value": reliability,
-            "unit": "%",
-            "score": score_reliability,
-            "help": "Reliability Index\n\nFormula: 100 − Coefficient of Variation of travel time\nCV = std(travel_time)/mean(travel_time) × 100%\nHow to read: Higher is better; 100% is perfectly consistent travel time.",
-        },
-        "congestion_freq": {
-            "value": cong_freq,
-            "unit": "%",
-            "score": score_congestion,
-            "extra": f"Hours > {high_delay_threshold:.0f}s: {cong_hours}/{total_hours}",
-            "help": f"Congestion Frequency\n\nFormula: hours(delay > {high_delay_threshold:.0f}s) / total_hours × 100%\nHow to read: Lower is better; share of hours with delays above the threshold.",
-        },
+    .context-header {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        padding: 2rem; border-radius: 15px; margin: 1rem 0 2rem; color: white; text-align: center;
+        box-shadow: 0 8px 32px rgba(79, 172, 254, 0.3); backdrop-filter: blur(10px);
     }
+    .context-header h2 { margin: 0; font-size: 2rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+    .context-header p { margin: 1rem 0 0; font-size: 1.1rem; opacity: 0.9; font-weight: 300; }
+    @media (prefers-color-scheme: dark) { .context-header { background: linear-gradient(135deg, #2980b9 0%, #3498db 100%); } }
 
+    .metric-container { background: rgba(79, 172, 254, 0.1); border: 1px solid rgba(79, 172, 254, 0.3);
+        border-radius: 15px; padding: 1.5rem; margin: 1rem 0; backdrop-filter: blur(10px); transition: all 0.3s ease; }
+    .metric-container:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(79, 172, 254, 0.2); }
 
-def render_badge(score: float) -> str:
-    """
-    Turn a 0..100 'goodness' score into your visual badge HTML, using get_performance_rating.
-    """
-    label, css = get_performance_rating(score)
-    return f'<span class="performance-badge {css}">{label}</span>'
+    .insight-box {
+        background: linear-gradient(135deg, rgba(79, 172, 254, 0.15) 0%, rgba(0, 242, 254, 0.15) 100%);
+        border-left: 5px solid #4facfe; border-radius: 12px; padding: 1.25rem 1.5rem; margin: 1.25rem 0;
+        box-shadow: 0 4px 15px rgba(79, 172, 254, 0.1);
+    }
+    .insight-box h4 { color: #1e3c72; margin-top: 0; font-weight: 600; }
 
+    .performance-badge { display: inline-block; padding: 0.35rem 0.9rem; border-radius: 25px; font-size: 0.85rem;
+        font-weight: 600; margin: 0.2rem; border: 2px solid transparent; transition: all 0.3s ease; }
+    .performance-badge:hover { transform: scale(1.05); border-color: rgba(255,255,255,0.25); }
+    .badge-excellent { background: linear-gradient(45deg, #2ecc71, #27ae60); color: white; }
+    .badge-good { background: linear-gradient(45deg, #3498db, #2980b9); color: white; }
+    .badge-fair { background: linear-gradient(45deg, #f39c12, #e67e22); color: white; }
+    .badge-poor { background: linear-gradient(45deg, #e74c3c, #c0392b); color: white; }
+    .badge-critical { background: linear-gradient(45deg, #e74c3c, #8e44ad); color: white; animation: pulse 2s infinite; }
+    @keyframes pulse { 0% {opacity:1} 50% {opacity:.7} 100% {opacity:1} }
+
+    .stTabs [data-baseweb="tab-list"] { gap: 16px; }
+    .stTabs [data-baseweb="tab"] { height: 56px; padding: 0 18px; border-radius: 12px;
+        background: rgba(79, 172, 254, 0.1); border: 1px solid rgba(79, 172, 254, 0.2); }
+
+    .chart-container { background: rgba(79, 172, 254, 0.05); border-radius: 15px; padding: 1rem; margin: 1rem 0;
+        border: 1px solid rgba(79, 172, 254, 0.1); }
+
+    .volume-metric { background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(41, 128, 185, 0.1));
+        border: 1px solid rgba(52, 152, 219, 0.3); border-radius: 12px; padding: 1rem; margin: 0.5rem 0; }
+
+    .modebar { filter: saturate(0.85) opacity(0.9); }
+</style>
+""", unsafe_allow_html=True)
 
 # =========================
-# Chart helpers
+# Title / Intro
 # =========================
-def performance_chart(data: pd.DataFrame, metric_type: str = "delay"):
-    if data.empty:
-        return None
-    metric_type = metric_type.lower().strip()
-    if metric_type == "delay":
-        y_col, title, color = "average_delay", "Traffic Delay Analysis", "#e74c3c"
-        y_label = "Average Delay (seconds)"
-        dist_x_label = "Average Delay (seconds)"
+st.markdown("""
+<div class="main-container">
+    <h1 style="text-align:center; margin:0; font-size:2.5rem; font-weight:800;">
+        🛣️ Active Transportation & Operations Management Dashboard
+    </h1>
+    <p style="text-align:center; margin-top:1rem; font-size:1.1rem; opacity:0.9;">
+        Advanced Traffic Engineering & Operations Management Platform
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<div style="
+    font-size: 1.05rem; font-weight: 400; color: var(--text-color);
+    background: linear-gradient(135deg, rgba(79, 172, 254, 0.1), rgba(0, 242, 254, 0.05));
+    padding: 1.5rem; border-radius: 18px; box-shadow: 0 8px 32px rgba(79,172,254,0.08);
+    margin: 1.25rem 0; line-height: 1.7; border: 1px solid rgba(79,172,254,0.2); backdrop-filter: blur(8px);
+">
+    <div style="text-align:center; margin-bottom: 0.5rem;">
+        <strong style="font-size: 1.2rem; color: #2980b9;">🚀 The ADVANTEC Platform</strong>
+    </div>
+    <p>Leverages <strong>millions of data points</strong> trained on advanced Machine Learning algorithms to optimize traffic flow, reduce travel time, minimize fuel consumption, and decrease greenhouse gas emissions across the Coachella Valley transportation network.</p>
+    <p><strong>Key Capabilities:</strong> Real-time anomaly detection • Intelligent cycle length optimization • Predictive traffic modeling • Performance analytics</p>
+</div>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<div style="background: linear-gradient(135deg, #3498db, #2980b9); color: white; padding: 1.1rem; border-radius: 15px;
+    margin: 1rem 0; text-align: center; box-shadow: 0 6px 20px rgba(52, 152, 219, 0.25);">
+    <h3 style="margin:0; font-weight:600;">🔍 Research Question</h3>
+    <p style="margin: 0.45rem 0 0; font-size: 1.0rem;">What are the main bottlenecks (slowest intersections) on Washington St that are most prone to causing increased travel times?</p>
+</div>
+""", unsafe_allow_html=True)
+
+# =========================
+# Tabs
+# =========================
+tab1, tab2 = st.tabs(["1️⃣ ITERIS CLEARGUIDE", "2️⃣ KINETIC MOBILITY"])
+
+# -------------------------
+# TAB 1: Performance / Travel Time
+# -------------------------
+with tab1:
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    status_text.text("Loading corridor performance data...")
+    progress_bar.progress(25)
+
+    corridor_df = get_corridor_df()
+    progress_bar.progress(100)
+
+    if corridor_df.empty:
+        st.error("❌ Failed to load corridor data. Please check your data sources.")
     else:
-        y_col, title, color = "average_traveltime", "Travel Time Analysis", "#3498db"
-        y_label = "Average Travel Time (minutes)"
-        dist_x_label = "Average Travel Time (minutes)"
+        status_text.text("✅ Data loaded successfully!")
+        time.sleep(0.5)
+        progress_bar.empty()
+        status_text.empty()
 
-    dd = data.dropna(subset=["local_datetime", y_col]).sort_values("local_datetime")
+        # Sidebar logos + divider
+        with st.sidebar:
+            st.markdown(
+                """
+                <div style="display:flex;justify-content:center;align-items:center;gap:12px;margin:6px 0 8px;">
+                  <img src="Logos/ACE-logo-HiRes.jpg" alt="ADVANTEC Logo" style="height:30px;">
+                  <img src="Logos/CV Sync__.jpg" alt="CV SYNC Logo" style="height:30px;">
+                </div>
+                <hr style="border:0;height:1px;background:rgba(79,172,254,.35);margin:8px 0 10px;">
+                """,
+                unsafe_allow_html=True,
+            )
 
-    fig = make_subplots(
-        rows=2, cols=1,
-        subplot_titles=("Time Series Analysis", "Distribution Analysis"),
-        vertical_spacing=0.1,
-    )
+        # -----------------------------
+        # TAB 1 controls inside a FORM (Render button); plus Refresh button
+        # -----------------------------
+        with st.sidebar:
+            with st.expander("TAB 1️⃣ Controls", expanded=False):
+                st.caption("Analysis Variables: Speed, Delay, and Travel Time")
 
-    # Time series plot
-    fig.add_trace(
-        go.Scatter(
-            x=dd["local_datetime"],
-            y=dd[y_col],
-            mode="lines+markers",
-            name=f"{metric_type.title()} Trend",
-            line=dict(color=color, width=2),
-            marker=dict(size=4),
-        ),
-        row=1,
-        col=1,
-    )
+                # Build node list for O-D defaults
+                node_list = _build_node_order(corridor_df)
+                def_node_a = node_list[0] if node_list else None
+                def_node_b = node_list[-1] if node_list else None
 
-    # Distribution histogram
-    fig.add_trace(
-        go.Histogram(
-            x=dd[y_col],
-            nbinsx=30,
-            name=f"{metric_type.title()} Distribution",
-            marker_color=color,
-            opacity=0.75,
-        ),
-        row=2,
-        col=1,
-    )
+                # Seed defaults once
+                if st.session_state.perf_cfg is None:
+                    _min = corridor_df["local_datetime"].dt.date.min()
+                    _max = corridor_df["local_datetime"].dt.date.max()
+                    st.session_state.perf_cfg = {
+                        "od_mode": True,
+                        "origin": def_node_a,
+                        "destination": def_node_b,
+                        "preset": "Full Range",
+                        "custom_start": _min,
+                        "custom_end": _max,
+                        "granularity": "Hourly",
+                        "time_filter": "All Hours",
+                        "start_hour": 7,
+                        "end_hour": 18,
+                    }
 
-    # Update layout with proper axis labels
-    fig.update_layout(
-        height=600,
-        title=title,
-        showlegend=True,
-        template="plotly_white",
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-    )
+                cfg0 = st.session_state.perf_cfg
+                min_date = corridor_df["local_datetime"].dt.date.min()
+                max_date = corridor_df["local_datetime"].dt.date.max()
 
-    # Update x and y axis labels for both subplots
-    fig.update_xaxes(title_text="Date/Time", row=1, col=1)
-    fig.update_yaxes(title_text=y_label, row=1, col=1)
-    fig.update_xaxes(title_text=dist_x_label, row=2, col=1)
-    fig.update_yaxes(title_text="Frequency (Number of Hours)", row=2, col=1)
+                with st.form("perf_form"):
+                    od_mode = st.checkbox(
+                        "Analyze Travel Time Between Points (O-D)",
+                        value=cfg0["od_mode"],
+                        help="Sum hourly travel times across consecutive segments between two points (uses dataset direction).",
+                    )
 
-    return fig
+                    origin = cfg0["origin"]
+                    destination = cfg0["destination"]
+                    if od_mode and len(node_list) >= 2:
+                        cA, cB = st.columns(2)
+                        with cA:
+                            origin = st.selectbox(
+                                "Origin", node_list,
+                                index=node_list.index(origin) if origin in node_list else 0
+                            )
+                        with cB:
+                            destination = st.selectbox(
+                                "Destination", node_list,
+                                index=node_list.index(destination) if destination in node_list else len(node_list)-1
+                            )
 
+                    st.markdown("#### 📅 Analysis Period")
+                    preset = st.selectbox(
+                        "Date Range Preset",
+                        ["Full Range", "Last 7 Days", "Last 30 Days", "Custom"],
+                        index=["Full Range","Last 7 Days","Last 30 Days","Custom"].index(cfg0["preset"]),
+                        key="perf_preset",
+                        help="Choose a preset or select Custom to pick exact dates."
+                    )
+                    custom_start = cfg0["custom_start"]
+                    custom_end = cfg0["custom_end"]
+                    if preset == "Custom":
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            custom_start = st.date_input(
+                                "Start Date", value=custom_start, min_value=min_date, max_value=max_date, key="perf_custom_start"
+                            )
+                        with c2:
+                            custom_end = st.date_input(
+                                "End Date", value=custom_end, min_value=min_date, max_value=max_date, key="perf_custom_end"
+                            )
 
-def volume_charts(
-    data: pd.DataFrame,
-    theoretical_link_capacity_vph: int,
-    high_volume_threshold_vph: int,
-):
-    if data.empty:
-        return None, None, None
-    dd = data.dropna(subset=["local_datetime", "total_volume", "intersection_name"]).copy()
-    dd.sort_values("local_datetime", inplace=True)
+                    st.markdown("#### ⏰ Analysis Settings")
+                    granularity = st.selectbox(
+                        "Data Aggregation",
+                        ["Hourly", "Daily", "Weekly", "Monthly"],
+                        index=["Hourly","Daily","Weekly","Monthly"].index(cfg0["granularity"]),
+                        key="granularity_perf",
+                        help="Higher aggregation smooths trends but may hide peaks",
+                    )
 
-    # 1) Trend by intersection
-    fig1 = px.line(
-        dd,
-        x="local_datetime",
-        y="total_volume",
-        color="intersection_name",
-        title="📈 Traffic Volume Trends by Intersection",
-        labels={"total_volume": "Volume (vehicles/hour)", "local_datetime": "Date/Time"},
-        template="plotly_white",
-    )
-    fig1.update_layout(
-        height=500,
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
+                    time_filter, start_hour, end_hour = None, None, None
+                    if granularity == "Hourly":
+                        time_filter = st.selectbox(
+                            "Time Period Focus",
+                            ["All Hours","Peak Hours (7–9 AM, 4–6 PM)","AM Peak (7–9 AM)","PM Peak (4–6 PM)","Off-Peak","Custom Range"],
+                            index=["All Hours","Peak Hours (7–9 AM, 4–6 PM)","AM Peak (7–9 AM)","PM Peak (4–6 PM)","Off-Peak","Custom Range"].index(cfg0["time_filter"]),
+                            key="time_period_focus_perf",
+                        )
+                        if time_filter == "Custom Range":
+                            c1, c2 = st.columns(2)
+                            with c1:
+                                start_hour = st.number_input("Start Hour (0–23)", 0, 23, cfg0["start_hour"], step=1, key="start_hour_perf")
+                            with c2:
+                                end_hour = st.number_input("End Hour (1–24)", 1, 24, cfg0["end_hour"], step=1, key="end_hour_perf")
 
-    # 2) Distribution + Hourly heatmap
-    fig2 = make_subplots(
-        rows=2,
-        cols=1,
-        subplot_titles=("Volume Distribution by Intersection", "Hourly Avg Volume Heatmap"),
-        vertical_spacing=0.12,
-    )
+                    submitted_perf = st.form_submit_button("Render", use_container_width=True)
 
-    # Box plots
-    for name, g in dd.groupby("intersection_name", sort=False):
-        fig2.add_trace(go.Box(y=g["total_volume"], name=name, boxpoints="outliers"), row=1, col=1)
+                # Small refresh button: clears caches and re-runs with last settings
+                if st.button("🔄 Refresh", type="secondary", help="Reload data/caches and re-render with last settings", key="perf_refresh_btn"):
+                    st.cache_data.clear()
+                    st.experimental_rerun()
 
-    dd["hour"] = dd["local_datetime"].dt.hour
-    hourly_avg = dd.groupby(["hour", "intersection_name"], as_index=False)["total_volume"].mean()
-    hourly_pivot = hourly_avg.pivot(index="intersection_name", columns="hour", values="total_volume").sort_index()
+                # After submit, persist config
+                if submitted_perf:
+                    # compute dates from preset/custom
+                    if preset == "Custom":
+                        start_d = _clamp(custom_start, min_date, max_date)
+                        end_d = _clamp(custom_end, min_date, max_date)
+                    else:
+                        start_d, end_d = _preset_dates(preset, min_date, max_date)
 
-    fig2.add_trace(
-        go.Heatmap(
-            z=hourly_pivot.values,
-            x=hourly_pivot.columns,
-            y=hourly_pivot.index,
-            colorscale="Blues",
-            showscale=True,
-            colorbar=dict(title="Avg Volume (vph)"),
-        ),
-        row=2,
-        col=1,
-    )
-    fig2.update_layout(
-        height=800,
-        title="📊 Volume Distribution & Capacity Analysis",
-        template="plotly_white",
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-    )
+                    # ensure ordering
+                    if start_d > end_d:
+                        start_d, end_d = end_d, start_d
 
-    # 3) Peak hour by intersection
-    hourly_volume = dd.groupby(["hour", "intersection_name"], as_index=False)["total_volume"].mean()
-    fig3 = px.line(
-        hourly_volume,
-        x="hour",
-        y="total_volume",
-        color="intersection_name",
-        title="🕐 Average Hourly Volume Patterns",
-        labels={"total_volume": "Average Volume (vph)", "hour": "Hour of Day"},
-        template="plotly_white",
-    )
-    fig3.add_hline(
-        y=theoretical_link_capacity_vph,
-        line_dash="dash",
-        line_color="red",
-        annotation_text=f"Theoretical Capacity ({theoretical_link_capacity_vph:,} vph)",
-    )
-    fig3.add_hline(
-        y=high_volume_threshold_vph,
-        line_dash="dot",
-        line_color="orange",
-        annotation_text=f"High Volume Threshold ({high_volume_threshold_vph:,} vph)",
-    )
-    fig3.update_layout(
-        height=500,
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
+                    st.session_state.perf_cfg = {
+                        "od_mode": od_mode,
+                        "origin": origin,
+                        "destination": destination,
+                        "preset": preset,
+                        "custom_start": start_d,
+                        "custom_end": end_d,
+                        "granularity": granularity,
+                        "time_filter": time_filter if granularity == "Hourly" else None,
+                        "start_hour": start_hour,
+                        "end_hour": end_hour,
+                    }
 
-    return fig1, fig2, fig3
+        # -----------------------------
+        # Render Tab 1 using the last-rendered config
+        # -----------------------------
+        cfg = st.session_state.perf_cfg
+        if cfg:
+            # resolve final date range
+            min_d = corridor_df["local_datetime"].dt.date.min()
+            max_d = corridor_df["local_datetime"].dt.date.max()
+            if cfg["preset"] == "Custom":
+                date_range = (cfg["custom_start"], cfg["custom_end"])
+            else:
+                date_range = _preset_dates(cfg["preset"], min_d, max_d)
 
+            granularity  = cfg["granularity"]
+            time_filter  = cfg["time_filter"]
+            start_hour   = cfg["start_hour"]
+            end_hour     = cfg["end_hour"]
+            od_mode      = cfg["od_mode"]
+            origin       = cfg["origin"]
+            destination  = cfg["destination"]
 
-# =========================
-# Date range UI helper
-# =========================
-def date_range_preset_controls(min_date: datetime.date, max_date: datetime.date, key_prefix: str):
-    """
-    Presets that default to Last 30 Days on first load, persist in session_state,
-    and won't clobber custom picks.
-    """
-    k_range = f"{key_prefix}_range"
+            try:
+                base_df = corridor_df.copy()
 
-    # Default to LAST 30 DAYS (bounded by min_date)
-    if k_range not in st.session_state:
-        default_start = max(min_date, max_date - timedelta(days=30))
-        st.session_state[k_range] = (default_start, max_date)
+                if base_df.empty:
+                    st.warning("⚠️ No data for the selected filters.")
+                else:
+                    filtered_data = process_traffic_data(
+                        base_df,
+                        date_range,
+                        granularity,
+                        time_filter if granularity == "Hourly" else None,
+                        start_hour,
+                        end_hour,
+                    )
 
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        if st.button("📅 Last 7 Days", key=f"{key_prefix}_7d"):
-            st.session_state[k_range] = (max(min_date, max_date - timedelta(days=7)), max_date)
-    with c2:
-        if st.button("📅 Last 30 Days", key=f"{key_prefix}_30d"):
-            st.session_state[k_range] = (max(min_date, max_date - timedelta(days=30)), max_date)
-    with c3:
-        if st.button("📅 Full Range", key=f"{key_prefix}_full"):
-            st.session_state[k_range] = (min_date, max_date)
+                    if filtered_data.empty:
+                        st.warning("⚠️ No data available for the selected filters.")
+                    else:
+                        total_records = len(filtered_data)
+                        data_span = (date_range[1] - date_range[0]).days + 1
+                        time_context = f" • {time_filter}" if (granularity == "Hourly" and time_filter) else ""
 
-    custom = st.date_input(
-        "Custom Date Range",
-        value=st.session_state[k_range],
-        min_value=min_date,
-        max_value=max_date,
-        key=f"{key_prefix}_custom",
-    )
-    if custom != st.session_state[k_range]:
-        st.session_state[k_range] = custom
+                        # O-D computation (if enabled and valid)
+                        route_label = "All Segments"
+                        od_raw = None
+                        if od_mode and origin and destination:
+                            node_order = _build_node_order(base_df)
+                            if origin in node_order and destination in node_order:
+                                i0, i1 = node_order.index(origin), node_order.index(destination)
+                                if i0 < i1:
+                                    path_segments = [f"{node_order[i]} → {node_order[i+1]}" for i in range(i0, i1)]
+                                    seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
+                                    if not seg_df.empty:
+                                        od_raw = seg_df.groupby("local_datetime", as_index=False)[
+                                            ["average_traveltime", "average_delay"]
+                                        ].sum()
+                                        route_label = f"{origin} → {destination}"
+                                else:
+                                    st.info("Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path.")
 
-    return st.session_state[k_range]
+                        # Header banner
+                        st.markdown(
+                            f"""
+                        <div style="
+                            background: linear-gradient(135deg, #2b77e5 0%, #19c3e6 100%);
+                            border-radius:16px; padding:18px 20px; color:#fff; margin:8px 0 14px;
+                            box-shadow:0 10px 26px rgba(25,115,210,.25); text-align:left;
+                            font-family: inherit;">
+                          <div style="display:flex; align-items:center; gap:10px;">
+                            <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.18);
+                                        display:flex;align-items:center;justify-content:center;
+                                        box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);">📊</div>
+                            <div style="font-size:1.9rem;font-weight:800;letter-spacing:.2px;">
+                              Travel Time Analysis: {route_label}
+                            </div>
+                          </div>
+                          <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
+                            <div>📅 {date_range[0].strftime('%b %d, %Y')} to {date_range[1].strftime('%b %d, %Y')} ({data_span} days) • {granularity} Aggregation{time_context}</div>
+                            <div>✅ Analyzing {total_records:,} data points across the selected period</div>
+                          </div>
+                        </div>
+                        """,
+                            unsafe_allow_html=True,
+                        )
 
+                        # Build raw_data for KPIs (use O-D aggregation if available)
+                        raw_data = base_df[
+                            (base_df["local_datetime"].dt.date >= date_range[0])
+                            & (base_df["local_datetime"].dt.date <= date_range[1])
+                        ].copy()
 
-# =========================
-# Processing
-# =========================
-def process_traffic_data(df, date_range, granularity, time_filter=None, start_hour=None, end_hour=None):
-    """
-    Process traffic data based on date range and granularity selections
-    """
-    # Convert datetime if not already done
-    df["local_datetime"] = pd.to_datetime(df["local_datetime"])
+                        if od_raw is not None and not od_raw.empty:
+                            od_raw["average_traveltime"] = pd.to_numeric(od_raw["average_traveltime"], errors="coerce")
+                            od_raw["average_delay"] = pd.to_numeric(od_raw["average_delay"], errors="coerce")
+                            raw_data = od_raw.copy()
 
-    # Filter by date range
-    if len(date_range) == 2:
-        start_date, end_date = date_range
-        df = df[
-            (df["local_datetime"].dt.date >= start_date)
-            & (df["local_datetime"].dt.date <= end_date)
-        ]
+                        if raw_data.empty:
+                            st.info("No raw hourly data in this window.")
+                        else:
+                            for col in ["average_delay", "average_traveltime", "average_speed"]:
+                                if col in raw_data:
+                                    raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
 
-    # Apply time filters for hourly data
-    if granularity == "Hourly" and time_filter:
-        if time_filter == "Peak Hours (7-9 AM, 4-6 PM)":
-            df = df[
-                (df["local_datetime"].dt.hour.between(7, 9))
-                | (df["local_datetime"].dt.hour.between(16, 18))
-            ]
-        elif time_filter == "AM Peak (7-9 AM)":
-            df = df[df["local_datetime"].dt.hour.between(7, 9)]
-        elif time_filter == "PM Peak (4-6 PM)":
-            df = df[df["local_datetime"].dt.hour.between(16, 18)]
-        elif time_filter == "Off-Peak":
-            df = df[
-                ~(df["local_datetime"].dt.hour.between(7, 9))
-                & ~(df["local_datetime"].dt.hour.between(16, 18))
-            ]
-        elif time_filter == "Custom Range" and start_hour is not None and end_hour is not None:
-            df = df[df["local_datetime"].dt.hour.between(start_hour, end_hour - 1)]
+                            st.subheader("🚦 Corridor Performance Metrics")
 
-    # Determine data type and aggregate accordingly
-    if "segment_name" in df.columns:  # Corridor data (delay/speed/travel time)
-        if granularity == "Daily":
-            df["date_group"] = df["local_datetime"].dt.date
-            grouped = df.groupby(["date_group", "corridor_id", "direction", "segment_name"]).agg(
-                {
-                    "average_delay": "mean",
-                    "average_traveltime": "mean",
-                    "average_speed": "mean",
-                }
-            ).reset_index()
-            grouped["local_datetime"] = pd.to_datetime(grouped["date_group"])
+                            # Five KPI row (interpretable + badges)
+                            k = compute_perf_kpis_interpretable(raw_data, HIGH_DELAY_SEC)
 
-        elif granularity == "Weekly":
-            df["week_group"] = df["local_datetime"].dt.to_period("W").dt.start_time
-            grouped = df.groupby(["week_group", "corridor_id", "direction", "segment_name"]).agg(
-                {
-                    "average_delay": "mean",
-                    "average_traveltime": "mean",
-                    "average_speed": "mean",
-                }
-            ).reset_index()
-            grouped["local_datetime"] = grouped["week_group"]
+                            c1, c2, c3, c4, c5 = st.columns(5)
+                            with c1:
+                                st.metric("🎯 Reliability Index", f"{k['reliability']['value']:.0f}{k['reliability']['unit']}", help=k['reliability']['help'])
+                                st.markdown(render_badge(k['reliability']['score']), unsafe_allow_html=True)
+                            with c2:
+                                st.metric("⚠️ Congestion Frequency", f"{k['congestion_freq']['value']:.1f}{k['congestion_freq']['unit']}", help=k['congestion_freq']['help'])
+                                st.caption(k['congestion_freq'].get('extra', ''))
+                                st.markdown(render_badge(k['congestion_freq']['score']), unsafe_allow_html=True)
+                            with c3:
+                                st.metric("⏱️ Average Travel Time", f"{k['avg_tt']['value']:.1f} {k['avg_tt']['unit']}", help=k['avg_tt']['help'])
+                                st.markdown(render_badge(k['avg_tt']['score']), unsafe_allow_html=True)
+                            with c4:
+                                st.metric("📈 Planning Time (95th)", f"{k['planning_time']['value']:.1f} {k['planning_time']['unit']}", help=k['planning_time']['help'])
+                                st.markdown(render_badge(k['planning_time']['score']), unsafe_allow_html=True)
+                            with c5:
+                                st.metric("🧭 Buffer Index", f"{k['buffer_index']['value']:.1f}{k['buffer_index']['unit']}", help=k['buffer_index']['help'])
+                                st.markdown(render_badge(k['buffer_index']['score']), unsafe_allow_html=True)
 
-        elif granularity == "Monthly":
-            df["month_group"] = df["local_datetime"].dt.to_period("M").dt.start_time
-            grouped = df.groupby(["month_group", "corridor_id", "direction", "segment_name"]).agg(
-                {
-                    "average_delay": "mean",
-                    "average_traveltime": "mean",
-                    "average_speed": "mean",
-                }
-            ).reset_index()
-            grouped["local_datetime"] = grouped["month_group"]
+                        if len(filtered_data) > 1:
+                            st.subheader("📈 Performance Trends")
+                            v1, v2 = st.columns(2)
+                            with v1:
+                                dc = performance_chart(filtered_data, "delay")
+                                if dc:
+                                    st.plotly_chart(dc, use_container_width=True)
+                            with v2:
+                                tc = performance_chart(filtered_data, "travel")
+                                if tc:
+                                    st.plotly_chart(tc, use_container_width=True)
 
-        else:  # Hourly - no aggregation needed
-            grouped = df
+                        if not raw_data.empty:
+                            worst_delay = (
+                                float(np.nanmax(raw_data["average_delay"]))
+                                if "average_delay" in raw_data and raw_data["average_delay"].notna().any()
+                                else 0.0
+                            )
+                            avg_tt = (
+                                float(np.nanmean(raw_data["average_traveltime"]))
+                                if "average_traveltime" in raw_data and raw_data["average_traveltime"].notna().any()
+                                else 0.0
+                            )
+                            worst_tt = (
+                                float(np.nanmax(raw_data["average_traveltime"]))
+                                if "average_traveltime" in raw_data and raw_data["average_traveltime"].notna().any()
+                                else 0.0
+                            )
+                            tt_delta = ((worst_tt - avg_tt) / avg_tt * 100) if avg_tt > 0 else 0
+                            if avg_tt > 0 and "average_traveltime" in raw_data:
+                                cv_tt = float(np.nanstd(raw_data["average_traveltime"]) / avg_tt) * 100
+                            else:
+                                cv_tt = 0.0
+                            reliability = max(0, 100 - cv_tt)
+                            high_delay_pct = (
+                                (raw_data["average_delay"] > HIGH_DELAY_SEC).mean() * 100
+                                if "average_delay" in raw_data and raw_data["average_delay"].notna().any()
+                                else 0.0
+                            )
+                            st.markdown(
+                                f"""
+                            <div class="insight-box">
+                                <h4>💡 Advanced Performance Insights</h4>
+                                <p><strong>📊 Data Overview:</strong> {len(filtered_data):,} {granularity.lower()} observations across {(date_range[1] - date_range[0]).days + 1} days.</p>
+                                <p><strong>🚨 Peaks:</strong> Delay up to {worst_delay:.0f}s ({worst_delay / 60:.1f} min) • Travel time up to {worst_tt:.1f} min (+{tt_delta:.0f}% vs avg).</p>
+                                <p><strong>🎯 Reliability:</strong> {reliability:.0f}% travel time reliability • Delays > {HIGH_DELAY_SEC}s occur {high_delay_pct:.1f}% of hours.</p>
+                                <p><strong>📌 Action:</strong> {"Critical intervention needed" if worst_delay > CRITICAL_DELAY_SEC else "Optimization recommended" if worst_delay > HIGH_DELAY_SEC else "Monitor trends"}.</p>
+                            </div>
+                            """,
+                                unsafe_allow_html=True,
+                            )
 
-    elif "intersection_id" in df.columns:  # Volume data
-        if granularity == "Daily":
-            df["date_group"] = df["local_datetime"].dt.date
-            grouped = df.groupby(["date_group", "intersection_id", "direction", "intersection_name"]).agg(
-                {"total_volume": "sum"}
-            ).reset_index()
-            grouped["local_datetime"] = pd.to_datetime(grouped["date_group"])
+                        # Bottleneck analysis table
+                        if not raw_data.empty and "segment_name" in base_df.columns:
+                            try:
+                                g = base_df[
+                                    (base_df["local_datetime"].dt.date >= date_range[0])
+                                    & (base_df["local_datetime"].dt.date <= date_range[1])
+                                ].groupby(["segment_name", "direction"]).agg(
+                                    average_delay_mean=("average_delay", "mean"),
+                                    average_delay_max=("average_delay", "max"),
+                                    average_traveltime_mean=("average_traveltime", "mean"),
+                                    average_traveltime_max=("average_traveltime", "max"),
+                                    average_speed_mean=("average_speed", "mean"),
+                                    average_speed_min=("average_speed", "min"),
+                                    n=("average_delay", "count"),
+                                ).reset_index()
 
-        elif granularity == "Weekly":
-            df["week_group"] = df["local_datetime"].dt.to_period("W").dt.start_time
-            grouped = df.groupby(["week_group", "intersection_id", "direction", "intersection_name"]).agg(
-                {"total_volume": "sum"}
-            ).reset_index()
-            grouped["local_datetime"] = grouped["week_group"]
+                                def _norm(s):
+                                    s = s.astype(float)
+                                    mn, mx = np.nanmin(s), np.nanmax(s)
+                                    if np.isfinite(mn) and np.isfinite(mx) and mx > mn:
+                                        return (s - mn) / (mx - mn)
+                                    return pd.Series(np.zeros(len(s)), index=s.index)
 
-        elif granularity == "Monthly":
-            df["month_group"] = df["local_datetime"].dt.to_period("M").dt.start_time
-            grouped = df.groupby(["month_group", "intersection_id", "direction", "intersection_name"]).agg(
-                {"total_volume": "sum"}
-            ).reset_index()
-            grouped["local_datetime"] = grouped["month_group"]
+                                score = (
+                                    0.45 * _norm(g["average_delay_max"])
+                                    + 0.35 * _norm(g["average_delay_mean"])
+                                    + 0.20 * _norm(g["average_traveltime_max"])
+                                ) * 100
+                                g["Bottleneck_Score"] = score.round(1)
 
-        else:  # Hourly - no aggregation needed
-            grouped = df
+                                bins = [-0.1, 20, 40, 60, 80, 200]
+                                labels = ["🟢 Excellent", "🔵 Good", "🟡 Fair", "🟠 Poor", "🔴 Critical"]
+                                g["🎯 Performance Rating"] = pd.cut(g["Bottleneck_Score"], bins=bins, labels=labels)
 
+                                final = g[
+                                    [
+                                        "segment_name","direction","🎯 Performance Rating","Bottleneck_Score",
+                                        "average_delay_mean","average_delay_max","average_traveltime_mean","average_traveltime_max",
+                                        "average_speed_mean","average_speed_min","n",
+                                    ]
+                                ].rename(
+                                    columns={
+                                        "segment_name": "Segment",
+                                        "direction": "Dir",
+                                        "average_delay_mean": "Avg Delay (s)",
+                                        "average_delay_max": "Peak Delay (s)",
+                                        "average_traveltime_mean": "Avg Time (min)",
+                                        "average_traveltime_max": "Peak Time (min)",
+                                        "average_speed_mean": "Avg Speed (mph)",
+                                        "average_speed_min": "Min Speed (mph)",
+                                        "n": "Obs",
+                                    }
+                                ).sort_values("Bottleneck_Score", ascending=False)
+
+                                st.subheader("🚨 Comprehensive Bottleneck Analysis")
+                                st.dataframe(
+                                    final.head(15),
+                                    use_container_width=True,
+                                    column_config={
+                                        "Bottleneck_Score": st.column_config.NumberColumn(
+                                            "🚨 Impact Score",
+                                            help="Composite (0–100); higher ⇒ worse",
+                                            format="%.1f",
+                                        )
+                                    },
+                                )
+
+                                st.download_button(
+                                    "⬇️ Download Bottleneck Table (CSV)",
+                                    data=final.to_csv(index=False).encode("utf-8"),
+                                    file_name="bottlenecks.csv",
+                                    mime="text/csv",
+                                )
+                                st.download_button(
+                                    "⬇️ Download Filtered Performance (CSV)",
+                                    data=filtered_data.to_csv(index=False).encode("utf-8"),
+                                    file_name="performance_filtered.csv",
+                                    mime="text/csv",
+                                )
+                            except Exception as e:
+                                st.error(f"❌ Error in performance analysis: {e}")
+
+            except Exception as e:
+                st.error(f"❌ Error processing traffic data: {e}")
+        else:
+            st.warning("⚠️ Click **Render** in the controls to generate the dashboard.")
+
+# -------------------------
+# TAB 2: Volume / Capacity
+# -------------------------
+with tab2:
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    status_text.text("Loading traffic demand data...")
+    progress_bar.progress(25)
+
+    volume_df = get_volume_df()
+    progress_bar.progress(100)
+
+    if volume_df.empty:
+        st.error("❌ Failed to load volume data. Please check your data sources.")
     else:
-        # Fallback - just return filtered data
-        grouped = df
+        status_text.text("✅ Volume data loaded successfully!")
+        time.sleep(0.5)
+        progress_bar.empty()
+        status_text.empty()
 
-    return grouped
+        # -----------------------------
+        # TAB 2 controls inside a FORM (Render button); plus Refresh button
+        # -----------------------------
+        with st.sidebar:
+            with st.expander("TAB 2️⃣ CONTROLS", expanded=False):
+                st.caption("Analysis Variables: Vehicle Volume")
+
+                # Seed defaults once
+                if st.session_state.vol_cfg is None:
+                    _min2 = volume_df["local_datetime"].dt.date.min()
+                    _max2 = volume_df["local_datetime"].dt.date.max()
+                    st.session_state.vol_cfg = {
+                        "intersection": "All Intersections",
+                        "preset": "Full Range",
+                        "custom_start": _min2,
+                        "custom_end": _max2,
+                        "granularity": "Hourly",
+                        "direction": "All Directions",
+                    }
+
+                cfgv0 = st.session_state.vol_cfg
+                min_date2 = volume_df["local_datetime"].dt.date.min()
+                max_date2 = volume_df["local_datetime"].dt.date.max()
+
+                with st.form("vol_form"):
+                    intersections = ["All Intersections"] + sorted(
+                        volume_df["intersection_name"].dropna().unique().tolist()
+                    )
+                    intersection = st.selectbox(
+                        "🚦 Select Intersection",
+                        intersections,
+                        index=intersections.index(cfgv0["intersection"]) if cfgv0["intersection"] in intersections else 0,
+                        key="intersection_vol",
+                    )
+
+                    st.markdown("#### 📅 Analysis Period")
+                    preset2 = st.selectbox(
+                        "Date Range Preset",
+                        ["Full Range", "Last 7 Days", "Last 30 Days", "Custom"],
+                        index=["Full Range","Last 7 Days","Last 30 Days","Custom"].index(cfgv0["preset"]),
+                        key="vol_preset",
+                    )
+                    custom_start2 = cfgv0["custom_start"]
+                    custom_end2 = cfgv0["custom_end"]
+                    if preset2 == "Custom":
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            custom_start2 = st.date_input(
+                                "Start Date", value=custom_start2, min_value=min_date2, max_value=max_date2, key="vol_custom_start"
+                            )
+                        with c2:
+                            custom_end2 = st.date_input(
+                                "End Date", value=custom_end2, min_value=min_date2, max_value=max_date2, key="vol_custom_end"
+                            )
+
+                    st.markdown("#### ⏰ Analysis Settings")
+                    granularity_vol = st.selectbox(
+                        "Data Aggregation",
+                        ["Hourly", "Daily", "Weekly", "Monthly"],
+                        index=["Hourly","Daily","Weekly","Monthly"].index(cfgv0["granularity"]),
+                        key="granularity_vol",
+                    )
+
+                    direction_options = ["All Directions"] + sorted(volume_df["direction"].dropna().unique().tolist())
+                    direction_filter = st.selectbox(
+                        "🔄 Direction Filter",
+                        direction_options,
+                        index=direction_options.index(cfgv0["direction"]) if cfgv0["direction"] in direction_options else 0,
+                        key="direction_filter_vol",
+                    )
+
+                    submitted_vol = st.form_submit_button("Render", use_container_width=True)
+
+                if st.button("🔄 Refresh", type="secondary", help="Reload data/caches and re-render with last settings", key="vol_refresh_btn"):
+                    st.cache_data.clear()
+                    st.experimental_rerun()
+
+                if submitted_vol:
+                    if preset2 == "Custom":
+                        start2 = _clamp(custom_start2, min_date2, max_date2)
+                        end2 = _clamp(custom_end2, min_date2, max_date2)
+                    else:
+                        start2, end2 = _preset_dates(preset2, min_date2, max_date2)
+                    if start2 > end2:
+                        start2, end2 = end2, start2
+
+                    st.session_state.vol_cfg = {
+                        "intersection": intersection,
+                        "preset": preset2,
+                        "custom_start": start2,
+                        "custom_end": end2,
+                        "granularity": granularity_vol,
+                        "direction": direction_filter,
+                    }
+
+        # -----------------------------
+        # Render Tab 2 using the last-rendered config
+        # -----------------------------
+        vcfg = st.session_state.vol_cfg
+        if vcfg:
+            # resolve final date range
+            min_d2 = volume_df["local_datetime"].dt.date.min()
+            max_d2 = volume_df["local_datetime"].dt.date.max()
+            if vcfg["preset"] == "Custom":
+                date_range_vol = (vcfg["custom_start"], vcfg["custom_end"])
+            else:
+                date_range_vol = _preset_dates(vcfg["preset"], min_d2, max_d2)
+
+            intersection     = vcfg["intersection"]
+            granularity_vol  = vcfg["granularity"]
+            direction_filter = vcfg["direction"]
+
+            try:
+                base_df = volume_df.copy()
+                if intersection != "All Intersections":
+                    base_df = base_df[base_df["intersection_name"] == intersection]
+                if direction_filter != "All Directions":
+                    base_df = base_df[base_df["direction"] == direction_filter]
+
+                if base_df.empty:
+                    st.warning("⚠️ No volume data for the selected filters.")
+                else:
+                    filtered_volume_data = process_traffic_data(base_df, date_range_vol, granularity_vol)
+
+                    if filtered_volume_data.empty:
+                        st.warning("⚠️ No volume data available for the selected range.")
+                    else:
+                        span = (date_range_vol[1] - date_range_vol[0]).days + 1
+                        total_obs = len(filtered_volume_data)
+
+                        st.markdown(
+                            f"""
+                        <div style="
+                            background: linear-gradient(135deg, #2b77e5 0%, #19c3e6 100%);
+                            border-radius:16px; padding:18px 20px; color:#fff; margin:8px 0 14px;
+                            box-shadow:0 10px 26px rgba(25,115,210,.25); text-align:left;
+                            font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+                          <div style="display:flex; align-items:center; gap:10px;">
+                            <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.18);
+                                        display:flex;align-items:center;justify-content:center;
+                                        box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);">📊</div>
+                            <div style="font-size:1.9rem;font-weight:800;letter-spacing:.2px;">
+                              Volume Analysis: {intersection}
+                            </div>
+                          </div>
+                          <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
+                            <div>📅 {date_range_vol[0].strftime('%b %d, %Y')} to {date_range_vol[1].strftime('%b %d, %Y')} ({span} days) • {granularity_vol} Aggregation</div>
+                            <div>✅ {total_obs:,} observations • Direction: {direction_filter}</div>
+                          </div>
+                        </div>
+                        """,
+                            unsafe_allow_html=True,
+                        )
+
+                        raw = base_df[
+                            (base_df["local_datetime"].dt.date >= date_range_vol[0])
+                            & (base_df["local_datetime"].dt.date <= date_range_vol[1])
+                        ].copy()
+
+                        st.subheader("🚦 Traffic Demand Performance Indicators")
+                        if raw.empty:
+                            st.info("No raw hourly volume in this window.")
+                        else:
+                            raw["total_volume"] = pd.to_numeric(raw["total_volume"], errors="coerce")
+                            col1, col2, col3, col4, col5 = st.columns(5)
+
+                            with col1:
+                                peak = float(np.nanmax(raw["total_volume"])) if raw["total_volume"].notna().any() else 0
+                                p95 = (
+                                    float(np.nanpercentile(raw["total_volume"].dropna(), 95))
+                                    if raw["total_volume"].notna().any()
+                                    else 0
+                                )
+                                util = (peak / THEORETICAL_LINK_CAPACITY_VPH) * 100 if THEORETICAL_LINK_CAPACITY_VPH else 0
+                                if util > 90:
+                                    badge = "badge-critical"
+                                elif util > 75:
+                                    badge = "badge-poor"
+                                elif util > 60:
+                                    badge = "badge-fair"
+                                else:
+                                    badge = "badge-good"
+                                st.metric("🔥 Peak Demand", f"{peak:,.0f} vehicles", delta=f"95th: {p95:,.0f}")
+                                st.markdown(
+                                    f'<span class="performance-badge {badge}">{util:.0f}% Capacity</span>',
+                                    unsafe_allow_html=True,
+                                )
+
+                            with col2:
+                                avg = float(np.nanmean(raw["total_volume"])) if raw["total_volume"].notna().any() else 0
+                                med = float(np.nanmedian(raw["total_volume"])) if raw["total_volume"].notna().any() else 0
+                                st.metric("📊 Average Demand", f"{avg:,.0f} vph", delta=f"Median: {med:,.0f}")
+                                avg_util = (avg / THEORETICAL_LINK_CAPACITY_VPH) * 100 if THEORETICAL_LINK_CAPACITY_VPH else 0
+                                badge = "badge-good" if avg_util <= 40 else ("badge-fair" if avg_util <= 60 else "badge-poor")
+                                st.markdown(
+                                    f'<span class="performance-badge {badge}">{avg_util:.0f}% Avg Util</span>',
+                                    unsafe_allow_html=True,
+                                )
+
+                            with col3:
+                                ratio = (peak / avg) if avg > 0 else 0
+                                st.metric("📈 Peak/Average Ratio", f"{ratio:.1f}x", help="Higher ⇒ more peaked demand")
+                                badge = "badge-good" if ratio <= 2 else ("badge-fair" if ratio <= 3 else "badge-poor")
+                                state = "Low" if ratio <= 2 else ("Moderate" if ratio <= 3 else "High")
+                                st.markdown(
+                                    f'<span class="performance-badge {badge}">{state} Peaking</span>',
+                                    unsafe_allow_html=True,
+                                )
+
+                            with col4:
+                                cv = (float(np.nanstd(raw["total_volume"])) / avg * 100) if avg > 0 else 0
+                                st.metric("🎯 Demand Consistency", f"{max(0, 100 - cv):.0f}%", delta=f"CV: {cv:.1f}%")
+                                badge = "badge-good" if cv < 30 else ("badge-fair" if cv < 50 else "badge-poor")
+                                label = "Consistent" if cv < 30 else ("Variable" if cv < 50 else "Highly Variable")
+                                st.markdown(
+                                    f'<span class="performance-badge {badge}">{label}</span>',
+                                    unsafe_allow_html=True,
+                                )
+
+                            with col5:
+                                high_hours = int((raw["total_volume"] > HIGH_VOLUME_THRESHOLD_VPH).sum())
+                                total_hours = int(raw["total_volume"].count())
+                                risk_pct = (high_hours / total_hours * 100) if total_hours > 0 else 0
+                                st.metric("⚠️ High Volume Hours", f"{high_hours}", delta=f"{risk_pct:.1f}% of time")
+                                if risk_pct > 25:
+                                    badge = "badge-critical"
+                                elif risk_pct > 15:
+                                    badge = "badge-poor"
+                                elif risk_pct > 5:
+                                    badge = "badge-fair"
+                                else:
+                                    badge = "badge-good"
+                                level = (
+                                    "Very High"
+                                    if risk_pct > 25
+                                    else ("High" if risk_pct > 15 else ("Moderate" if risk_pct > 5 else "Low"))
+                                )
+                                st.markdown(
+                                    f'<span class="performance-badge {badge}">{level} Risk</span>',
+                                    unsafe_allow_html=True,
+                                )
+
+                        st.subheader("📈 Volume Analysis Visualizations")
+                        if len(filtered_volume_data) > 1:
+                            chart1, chart2, chart3 = volume_charts(
+                                filtered_volume_data,
+                                THEORETICAL_LINK_CAPACITY_VPH,
+                                HIGH_VOLUME_THRESHOLD_VPH,
+                            )
+                            if chart1:
+                                st.plotly_chart(chart1, use_container_width=True)
+                            colA, colB = st.columns(2)
+                            with colA:
+                                if chart3:
+                                    st.plotly_chart(chart3, use_container_width=True)
+                            with colB:
+                                if chart2:
+                                    st.plotly_chart(chart2, use_container_width=True)
+
+                        if not raw.empty:
+                            peak = float(np.nanmax(raw["total_volume"])) if raw["total_volume"].notna().any() else 0
+                            avg = float(np.nanmean(raw["total_volume"])) if raw["total_volume"].notna().any() else 0
+                            ratio = (peak / avg) if avg > 0 else 0
+                            cv = (float(np.nanstd(raw["total_volume"])) / avg * 100) if avg > 0 else 0
+                            util = (peak / THEORETICAL_LINK_CAPACITY_VPH) * 100 if THEORETICAL_LINK_CAPACITY_VPH else 0
+                            high_hours = int((raw["total_volume"] > HIGH_VOLUME_THRESHOLD_VPH).sum())
+                            total_hours = int(raw["total_volume"].count())
+                            risk_pct = (high_hours / total_hours * 100) if total_hours > 0 else 0
+
+                            action = (
+                                "Immediate capacity expansion needed"
+                                if util > 90
+                                else "Consider signal optimization"
+                                if util > 75
+                                else "Monitor trends & optimize timing"
+                                if util > 60
+                                else "Current capacity appears adequate"
+                            )
+
+                            st.markdown(
+                                f"""
+                            <div class="insight-box">
+                                <h4>💡 Advanced Volume Analysis Insights</h4>
+                                <p><strong>📊 Capacity:</strong> Peak {peak:,.0f} vph ({util:.0f}% of {THEORETICAL_LINK_CAPACITY_VPH:,} vph) • Avg {avg:,.0f} vph.</p>
+                                <p><strong>📈 Demand Shape:</strong> {ratio:.1f}× peak-to-average • Consistency {max(0, 100 - cv):.0f}%.</p>
+                                <p><strong>⚠️ Risk:</strong> >{HIGH_VOLUME_THRESHOLD_VPH:,} vph occurs {high_hours} hours ({risk_pct:.1f}% of period).</p>
+                                <p><strong>🎯 Recommendation:</strong> {action}.</p>
+                            </div>
+                            """,
+                                unsafe_allow_html=True,
+                            )
+
+                        st.subheader("🚨 Intersection Volume & Capacity Risk Analysis")
+                        try:
+                            g = raw.groupby(["intersection_name", "direction"]).agg(
+                                total_volume_mean=("total_volume", "mean"),
+                                total_volume_max=("total_volume", "max"),
+                                total_volume_std=("total_volume", "std"),
+                                total_volume_count=("total_volume", "count"),
+                            ).reset_index()
+
+                            g["Peak_Capacity_Util"] = (
+                                g["total_volume_max"] / THEORETICAL_LINK_CAPACITY_VPH * 100
+                            ).round(1)
+                            g["Avg_Capacity_Util"] = (
+                                g["total_volume_mean"] / THEORETICAL_LINK_CAPACITY_VPH * 100
+                            ).round(1)
+                            g["Volume_Variability"] = (
+                                g["total_volume_std"] / g["total_volume_mean"] * 100
+                            ).replace([np.inf, -np.inf], np.nan).fillna(0).round(1)
+                            g["Peak_Avg_Ratio"] = (
+                                g["total_volume_max"] / g["total_volume_mean"]
+                            ).replace([np.inf, -np.inf], 0).fillna(0).round(1)
+
+                            g["🚨 Risk Score"] = (
+                                0.5 * g["Peak_Capacity_Util"]
+                                + 0.3 * g["Avg_Capacity_Util"]
+                                + 0.2 * (g["Peak_Avg_Ratio"] * 10)
+                            ).round(1)
+
+                            g["⚠️ Risk Level"] = pd.cut(
+                                g["🚨 Risk Score"],
+                                bins=[0, 40, 60, 80, 90, 999],
+                                labels=["🟢 Low Risk", "🟡 Moderate Risk", "🟠 High Risk", "🔴 Critical Risk", "🚨 Severe Risk"],
+                                include_lowest=True,
+                            )
+                            g["🎯 Action Priority"] = pd.cut(
+                                g["Peak_Capacity_Util"],
+                                bins=[0, 60, 75, 90, 999],
+                                labels=["🟢 Monitor", "🟡 Optimize", "🟠 Upgrade", "🔴 Urgent"],
+                                include_lowest=True,
+                            )
+
+                            final = g[
+                                [
+                                    "intersection_name","direction","⚠️ Risk Level","🎯 Action Priority","🚨 Risk Score",
+                                    "Peak_Capacity_Util","Avg_Capacity_Util","total_volume_mean","total_volume_max",
+                                    "Peak_Avg_Ratio","total_volume_count",
+                                ]
+                            ].rename(
+                                columns={
+                                    "intersection_name": "Intersection",
+                                    "direction": "Dir",
+                                    "Peak_Capacity_Util": "📊 Peak Capacity %",
+                                    "Avg_Capacity_Util": "📊 Avg Capacity %",
+                                    "total_volume_mean": "Avg Volume (vph)",
+                                    "total_volume_max": "Peak Volume (vph)",
+                                    "total_volume_count": "Data Points",
+                                }
+                            ).sort_values("🚨 Risk Score", ascending=False)
+
+                            st.dataframe(
+                                final.head(15),
+                                use_container_width=True,
+                                column_config={
+                                    "🚨 Risk Score": st.column_config.NumberColumn(
+                                        "🚨 Capacity Risk Score",
+                                        help="Composite of peak/avg util + peaking",
+                                        format="%.1f",
+                                        min_value=0,
+                                        max_value=120,
+                                    ),
+                                    "📊 Peak Capacity %": st.column_config.NumberColumn("📊 Peak Capacity %", format="%.1f%%"),
+                                    "📊 Avg Capacity %": st.column_config.NumberColumn("📊 Avg Capacity %", format="%.1f%%"),
+                                },
+                            )
+
+                            st.download_button(
+                                "⬇️ Download Capacity Risk Table (CSV)",
+                                data=final.to_csv(index=False).encode("utf-8"),
+                                file_name="capacity_risk.csv",
+                                mime="text/csv",
+                            )
+                            st.download_button(
+                                "⬇️ Download Filtered Volume (CSV)",
+                                data=filtered_volume_data.to_csv(index=False).encode("utf-8"),
+                                file_name="volume_filtered.csv",
+                                mime="text/csv",
+                            )
+                        except Exception as e:
+                            st.error(f"❌ Error in volume analysis: {e}")
+                            simple = raw.groupby(["intersection_name", "direction"]).agg(
+                                Avg=("total_volume", "mean"), Peak=("total_volume", "max")
+                            ).reset_index().sort_values("Peak", ascending=False)
+                            st.dataframe(simple, use_container_width=True)
+
+                        # Cycle Length Recommendations section (your module)
+                        render_cycle_length_section(raw)
+
+            except Exception as e:
+                st.error(f"❌ Error processing volume data: {e}")
+                st.info("Please check your data sources and try again.")
+        else:
+            st.warning("⚠️ Click **Render** in the controls to generate the dashboard.")
+
+# =========================
+# FOOTER (force subtitle + copyright to white in dark mode)
+# =========================
+FOOTER = """
+<style>
+  /* Light mode defaults */
+  .footer-title { color:#2980b9; margin:0 0 .4rem; font-weight:700; }
+
+  .social-btn {
+    width: 40px; height: 40px; display:grid; place-items:center; border-radius:50%;
+    background:#ffffff; border:1px solid rgba(41,128,185,.25);
+    box-shadow:0 2px 8px rgba(0,0,0,.08); text-decoration:none;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .social-btn:hover { transform: translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.12); }
+
+  .website-pill {
+    height:40px; display:inline-flex; align-items:center; gap:8px; padding:0 12px;
+    border-radius:9999px; background:#ffffff; border:1px solid #2980b9; color:#2980b9;
+    font-weight:700; text-decoration:none; box-shadow:0 2px 8px rgba(0,0,0,.08);
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .website-pill:hover { transform: translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.12); }
+</style>
+
+<div class="footer-card" style="text-align:center; padding: 1.25rem;
+    background: linear-gradient(135deg, rgba(79,172,254,0.1), rgba(0,242,254,0.05));
+    border-radius: 15px; margin-top: 1rem; border: 1px solid rgba(79,172,254,0.2);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif;">
+
+  <h4 class="footer-title">🛣️ Active Transportation & Operations Management Dashboard</h4>
+
+  <!-- These will turn white in dark mode via JavaScript -->
+  <p class="footer-sub" style="margin:.1rem 0 0; font-size:1.0rem; color:#0f2f52;">
+    Powered by Advanced Machine Learning • Real-time Traffic Intelligence • Intelligent Transportation Solutions (ITS)
+  </p>
+
+  <div style="display:flex; justify-content:center; align-items:center; gap:14px; margin:12px 0 8px;">
+    <a class="social-btn" href="https://www.instagram.com/advantec98/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+      <span style="font:700 13px/1 system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial; color:#444;">IG</span>
+    </a>
+    <a class="social-btn" href="https://www.linkedin.com/company/advantec-consulting-engineers-inc./posts/?feedView=all"
+       target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 448 512" aria-hidden="true"><path fill="#0A66C2" d="M100.28 448H7.4V148.9h92.88zM53.79 108.1C24.09 108.1 0 83.5 0 53.8 0 24.1 24.1 0 53.79 0s53.8 24.1 53.8 53.8c0 29.7-24.1 54.3-53.8 54.3zM447.9 448h-92.68V302.4c0-34.7-.7-79.3-48.3-79.3-48.3 0-55.7 37.7-55.7 76.6V448h-92.7V148.9h89V185h1.3c12.4-23.6 42.7-48.3 87.8-48.3 93.9 0 111.2 61.8 111.2 142.3V448z"/></svg>
+    </a>
+    <a class="social-btn" href="https://www.facebook.com/advantecconsultingUSA" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 320 512" aria-hidden="true"><path fill="#1877F2" d="M279.14 288l14.22-92.66h-88.91v-60.13c0-25.35 12.42-50.06 52.24-50.06h40.42V6.26S263.61 0 225.36 0c-73.22 0-121 44.38-121 124.72v70.62H22.89V288h81.47v224h100.2V288z"/></svg>
+    </a>
+    <a class="website-pill" href="https://advantec-usa.com/" target="_blank" rel="noopener noreferrer" aria-label="ADVANTEC Website">
+      <span style="font-size:18px; line-height:1;">🌐</span>
+      <span>Website</span>
+    </a>
+  </div>
+
+  <!-- This will turn white in dark mode via JavaScript -->
+  <p class="footer-copy" style="margin:.2rem 0 0; font-size:.9rem; color:#0f2f52;">
+    © 2025 ADVANTEC Consulting Engineers, Inc. — "Because We Care"
+  </p>
+</div>
+
+<script>
+(function() {
+  function updateFooterColors() {
+    const body = document.body;
+    const computed = getComputedStyle(body);
+    const bgColor = computed.backgroundColor || getComputedStyle(document.documentElement).getPropertyValue('--background-color') || '#ffffff';
+
+    let r=255,g=255,b=255;
+    if (bgColor.startsWith('rgb')) {
+      const m = bgColor.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);
+      if (m) { r = parseInt(m[1]); g = parseInt(m[2]); b = parseInt(m[3]); }
+    }
+    const luminance = (0.299*r + 0.587*g + 0.114*b) / 255;
+    const isDark = luminance < 0.5;
+
+    const subtitle = document.querySelector('.footer-sub');
+    const copyright = document.querySelector('.footer-copy');
+    const title = document.querySelector('.footer-title');
+
+    if (subtitle && copyright) {
+      if (isDark) {
+        subtitle.style.color = '#ffffff';
+        copyright.style.color = '#ffffff';
+        if (title) title.style.color = '#7ec3ff';
+      } else {
+        subtitle.style.color = '#0f2f52';
+        copyright.style.color = '#0f2f52';
+        if (title) title.style.color = '#2980b9';
+      }
+    }
+  }
+  updateFooterColors();
+  const observer = new MutationObserver(updateFooterColors);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
+  observer.observe(document.body, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
+  setInterval(updateFooterColors, 1000);
+})();
+</script>
+"""
+
+st.markdown(FOOTER, unsafe_allow_html=True)
