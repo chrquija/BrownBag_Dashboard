@@ -245,7 +245,7 @@ with tab1:
                     else:
                         st.info("Not enough nodes found to build O-D options.")
 
-            min_date = corridor_df["local_datetime"].dt.date.min()
+                min_date = corridor_df["local_datetime"].dt.date.min()
                 max_date = corridor_df["local_datetime"].dt.date.max()
 
                 st.markdown("#### 📅 Analysis Period")
