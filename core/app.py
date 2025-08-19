@@ -47,6 +47,20 @@ HIGH_VOLUME_THRESHOLD_VPH = 1200
 CRITICAL_DELAY_SEC = 120
 HIGH_DELAY_SEC = 60
 
+DESIRED_NODE_ORDER_BOTTOM_UP = [
+    "Avenue 52",
+    "Calle Tampico",
+    "Village Shopping Ctr",
+    "Avenue 50",
+    "Sagebrush Ave",
+    "Eisenhower Dr",
+    "Avenue 48",
+    "Avenue 47",
+    "Point Happy Simon",
+    "Hwy 111",
+]
+
+
 # Build ordered node list from segment_name like "A → B"
 def _build_node_order(df: pd.DataFrame) -> list[str]:
     if df is None or df.empty or "segment_name" not in df.columns:
@@ -204,7 +218,7 @@ with tab1:
 
                 # O-D mode (origin → destination) replaces segment picker
                 od_mode = st.checkbox(
-                    "Analyze Travel Time Between Points (O-D)",
+                    "Origin - Destination (O-D) Mode",
                     value=True,
                     help="Sum hourly travel times across consecutive segments between two points (uses dataset direction).",
                 )
@@ -216,11 +230,22 @@ with tab1:
                         with cA:
                             origin = st.selectbox("Origin", node_list, index=0, key="od_origin")
                         with cB:
-                            destination = st.selectbox("Destination", node_list, index=len(node_list) - 1, key="od_destination")
+                            destination = st.selectbox("Destination", node_list, index=len(node_list) - 1,
+                                                       key="od_destination")
+
+                        # Optional: validation preview to ensure the selected O-D maps to actual segments
+                        if origin and destination and origin in node_list and destination in node_list:
+                            i0, i1 = node_list.index(origin), node_list.index(destination)
+                            if i0 < i1:
+                                preview_segments = [f"{node_list[i]} → {node_list[i + 1]}" for i in range(i0, i1)]
+                                found = int(corridor_df["segment_name"].isin(preview_segments).sum())
+                                st.caption(f"Path preview: {found}/{len(preview_segments)} segments found in data.")
+                            else:
+                                st.caption("Path preview: reverse direction selected (no forward segments).")
                     else:
                         st.info("Not enough nodes found to build O-D options.")
 
-                min_date = corridor_df["local_datetime"].dt.date.min()
+            min_date = corridor_df["local_datetime"].dt.date.min()
                 max_date = corridor_df["local_datetime"].dt.date.max()
 
                 st.markdown("#### 📅 Analysis Period")
