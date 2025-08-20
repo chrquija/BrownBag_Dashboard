@@ -354,6 +354,7 @@ with tab1:
                             raw_data = od_series.copy()
                         else:
                             # Fallback to filtered_data if hourly O-D can't be built
+                            od_series = pd.DataFrame()  # ensure variable exists
                             raw_data = filtered_data.copy()
 
                         if raw_data.empty:
@@ -407,12 +408,16 @@ with tab1:
                         if len(filtered_data) > 1:
                             st.subheader("📈 Performance Trends")
                             v1, v2 = st.columns(2)
+
+                            # Use O-D series for trends if available; otherwise fall back
+                            trends_df = od_series if not od_series.empty else filtered_data
+
                             with v1:
-                                dc = performance_chart(filtered_data, "delay")
+                                dc = performance_chart(trends_df, "delay")
                                 if dc:
                                     st.plotly_chart(dc, use_container_width=True)
                             with v2:
-                                tc = performance_chart(filtered_data, "travel")
+                                tc = performance_chart(trends_df, "travel")
                                 if tc:
                                     st.plotly_chart(tc, use_container_width=True)
 
