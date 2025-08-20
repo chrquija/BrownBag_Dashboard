@@ -252,7 +252,7 @@ def compute_perf_kpis_interpretable(df: pd.DataFrame, high_delay_threshold: floa
             "unit": "%",
             "score": score_congestion,
             "extra": f"Hours > {high_delay_threshold:.0f}s: {cong_hours}/{total_hours}",
-            "help": f"Congestion Frequency\n\nWhat it means: How often delay is above the chosen threshold during your selected period.\nWhy it exists: Highlights how frequently you encounter “too much” delay.\nHow it’s calculated: Share of hours with delay above the threshold.\nFormula: hours(delay > threshold) ÷ total_hours × 100%\nExample: 0 of 4 hours above {high_delay_threshold:.0f}s → 0%.",
+            "help": f"Congestion Frequency\n\nWhat it means: How often delay occurs above the chosen threshold of 60s during your selected period.\nWhy it exists: Highlights how frequently you encounter “too much” delay.\n\nExample: 0 of 4 hours above {high_delay_threshold:.0f}s → 0%.",
         },
     }
 
