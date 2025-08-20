@@ -342,7 +342,7 @@ with tab1:
                             working_df,
                             date_range,
                             "Hourly",  # force hourly to avoid averaging averages
-                            time_filter if granularity == "Hourly" else None,
+                            time_filter,
                             start_hour,
                             end_hour,
                         )
@@ -411,6 +411,33 @@ with tab1:
 
                             # Use O-D series for trends if available; otherwise fall back
                             trends_df = od_series if not od_series.empty else filtered_data
+
+                            # If user selected Daily/Weekly/Monthly, aggregate the O-D trends to match the selection
+                            if not od_series.empty and granularity in ("Daily", "Weekly", "Monthly"):
+                                tmp = od_series.copy()
+                                tmp["local_datetime"] = pd.to_datetime(tmp["local_datetime"])
+                                if granularity == "Daily":
+                                    tmp["date_group"] = tmp["local_datetime"].dt.date
+                                    trends_df = (
+                                        tmp.groupby("date_group", as_index=False)
+                                        .agg({"average_traveltime": "mean", "average_delay": "mean"})
+                                        .rename(columns={"date_group": "local_datetime"})
+                                    )
+                                    trends_df["local_datetime"] = pd.to_datetime(trends_df["local_datetime"])
+                                elif granularity == "Weekly":
+                                    tmp["week_group"] = tmp["local_datetime"].dt.to_period("W").dt.start_time
+                                    trends_df = (
+                                        tmp.groupby("week_group", as_index=False)
+                                        .agg({"average_traveltime": "mean", "average_delay": "mean"})
+                                        .rename(columns={"week_group": "local_datetime"})
+                                    )
+                                elif granularity == "Monthly":
+                                    tmp["month_group"] = tmp["local_datetime"].dt.to_period("M").dt.start_time
+                                    trends_df = (
+                                        tmp.groupby("month_group", as_index=False)
+                                        .agg({"average_traveltime": "mean", "average_delay": "mean"})
+                                        .rename(columns={"month_group": "local_datetime"})
+                                    )
 
                             with v1:
                                 dc = performance_chart(trends_df, "delay")
