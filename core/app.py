@@ -287,13 +287,35 @@ with tab1:
                         if origin in node_order and destination in node_order:
                             i0, i1 = node_order.index(origin), node_order.index(destination)
                             if i0 < i1:
-                                path_segments = [f"{node_order[i]} → {node_order[i+1]}" for i in range(i0, i1)]
+                                # Forward path (bottom → top) → use consecutive segments and keep NB only
+                                path_segments = [f"{node_order[i]} → {node_order[i + 1]}" for i in range(i0, i1)]
                                 seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
                                 if not seg_df.empty:
+                                    # Direction filter: normalize and keep NB rows only
+                                    if "direction" in seg_df.columns:
+                                        dir_norm = (
+                                            seg_df["direction"].astype(str).str.strip().str.lower()
+                                            .replace({"northbound": "nb", "southbound": "sb"})
+                                        )
+                                        seg_df = seg_df.loc[dir_norm == "nb"]
                                     working_df = seg_df.copy()
                                     route_label = f"{origin} → {destination}"
                             else:
-                                st.info("Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path.")
+                                # Reverse path (top → bottom) → build reversed segments and keep SB only
+                                path_segments = [f"{node_order[i - 1]} → {node_order[i]}" for i in range(i1, i0, -1)]
+                                seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
+                                if not seg_df.empty:
+                                    if "direction" in seg_df.columns:
+                                        dir_norm = (
+                                            seg_df["direction"].astype(str).str.strip().str.lower()
+                                            .replace({"northbound": "nb", "southbound": "sb"})
+                                        )
+                                        seg_df = seg_df.loc[dir_norm == "sb"]
+                                    working_df = seg_df.copy()
+                                    route_label = f"{origin} → {destination}"
+                                else:
+                                    st.info(
+                                        "Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path.")
 
                     # Filter + aggregate once for charts/tables at requested granularity
                     filtered_data = process_traffic_data(
