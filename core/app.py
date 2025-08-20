@@ -167,7 +167,7 @@ st.markdown("""
     <div style="text-align:center; margin-bottom: 0.5rem;">
         <strong style="font-size: 1.2rem; color: #2980b9;">🚀 The ADVANTEC Platform</strong>
     </div>
-    <p>Leverages <strong>millions of data points</strong> trained on advanced Machine Learning algorithms to optimize traffic flow, reduce travel time, minimize fuel consumption, and decrease greenhouse gas emissions across the Coachella Valley transportation network.</p>
+    <p>Leverages <strong>millions of data points</strong> trained on advanced Machine Learning algorithms to optimize traffic flow, reduce travel time, minimize fuel consumption, and decrease greenhouse gas emissions across the transportation network.</p>
     <p><strong>Key Capabilities:</strong> Real-time anomaly detection • Intelligent cycle length optimization • Predictive traffic modeling • Performance analytics</p>
 </div>
 """, unsafe_allow_html=True)
@@ -176,7 +176,7 @@ st.markdown("""
 <div style="background: linear-gradient(135deg, #3498db, #2980b9); color: white; padding: 1.1rem; border-radius: 15px;
     margin: 1rem 0; text-align: center; box-shadow: 0 6px 20px rgba(52, 152, 219, 0.25);">
     <h3 style="margin:0; font-weight:600;">🔍 Research Question</h3>
-    <p style="margin: 0.45rem 0 0; font-size: 1.0rem;">What are the main bottlenecks (slowest intersections) on Washington St that are most prone to causing increased travel times?</p>
+    <p style="margin: 0.45rem 0 0; font-size: 1.0rem;">What are the main bottlenecks on Washington St that most increase travel times?</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -205,27 +205,23 @@ with tab1:
         progress_bar.empty()
         status_text.empty()
 
-        # ... existing code ...
-        # Sidebar logos
+        # Sidebar logos + Controls
         with st.sidebar:
             st.image("Logos/ACE-logo-HiRes.jpg", width=210)
             st.image("Logos/CV Sync__.jpg", width=205)
 
-            # Controls
             with st.expander("TAB 1️⃣ CONTROLS", expanded=False):
                 st.caption("Variables: Speed, Delay, and Travel Time")
 
-                # O-D mode (origin → destination) replaces segment picker
+                # O-D mode (origin → destination)
                 od_mode = st.checkbox(
                     "Origin - Destination Mode",
                     value=True,
-                    help="Sum hourly travel times across consecutive segments between two points.",
+                    help="Compute KPIs using summed per-hour O-D trip times along the selected path.",
                 )
                 origin, destination = None, None
                 if od_mode:
                     node_list_raw = _build_node_order(corridor_df)
-
-                    # Force canonical bottom→top order
                     known_in_data = [n for n in DESIRED_NODE_ORDER_BOTTOM_UP if n in node_list_raw]
                     extras = [n for n in node_list_raw if n not in DESIRED_NODE_ORDER_BOTTOM_UP]
                     node_list = known_in_data + extras
@@ -235,15 +231,7 @@ with tab1:
                         with cA:
                             origin = st.selectbox("Origin", node_list, index=0, key="od_origin")
                         with cB:
-                            destination = st.selectbox("Destination", node_list, index=len(node_list) - 1,
-                                                       key="od_destination")
-
-                        # Optional: path coverage preview
-                        if origin and destination and origin in node_list and destination in node_list:
-                            i0, i1 = node_list.index(origin), node_list.index(destination)
-                            if i0 < i1:
-                                preview_segments = [f"{node_list[i]} → {node_list[i + 1]}" for i in range(i0, i1)]
-                                found = int(corridor_df["segment_name"].isin(preview_segments).sum())
+                            destination = st.selectbox("Destination", node_list, index=len(node_list) - 1, key="od_destination")
                     else:
                         st.info("Not enough nodes found to build O-D options.")
 
@@ -283,17 +271,15 @@ with tab1:
                             start_hour = st.number_input("Start Hour (0–23)", 0, 23, 7, step=1, key="start_hour_perf")
                         with c2:
                             end_hour = st.number_input("End Hour (1–24)", 1, 24, 18, step=1, key="end_hour_perf")
-        # ... existing code ...
 
         # Main tab content
         if len(date_range) == 2:
             try:
                 base_df = corridor_df.copy()
-
                 if base_df.empty:
                     st.warning("⚠️ No data for the selected segment.")
                 else:
-                    # Build working_df as O-D subset (if enabled), then filter + aggregate once
+                    # O-D subset first
                     working_df = base_df.copy()
                     route_label = "All Segments"
                     if od_mode and origin and destination:
@@ -309,7 +295,7 @@ with tab1:
                             else:
                                 st.info("Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path.")
 
-                    # Apply filters/aggregation to working_df
+                    # Filter + aggregate once for charts/tables at requested granularity
                     filtered_data = process_traffic_data(
                         working_df,
                         date_range,
@@ -351,8 +337,25 @@ with tab1:
                             unsafe_allow_html=True,
                         )
 
-                        # KPIs must reflect the same filtered_data used for charts
-                        raw_data = filtered_data.copy()
+                        # Build per-hour O-D series (sum across segments per hour) for KPIs
+                        od_hourly = process_traffic_data(
+                            working_df,
+                            date_range,
+                            "Hourly",  # force hourly to avoid averaging averages
+                            time_filter if granularity == "Hourly" else None,
+                            start_hour,
+                            end_hour,
+                        )
+                        if not od_hourly.empty:
+                            od_series = (
+                                od_hourly.groupby("local_datetime", as_index=False)
+                                .agg({"average_traveltime": "sum", "average_delay": "sum"})
+                            )
+                            raw_data = od_series.copy()
+                        else:
+                            # Fallback to filtered_data if hourly O-D can't be built
+                            raw_data = filtered_data.copy()
+
                         if raw_data.empty:
                             st.info("No data in this window.")
                         else:
@@ -364,7 +367,6 @@ with tab1:
                             k = compute_perf_kpis_interpretable(raw_data, HIGH_DELAY_SEC)
 
                             c1, c2, c3, c4, c5 = st.columns(5)
-
                             with c1:
                                 st.metric(
                                     "🎯 Reliability Index",
@@ -372,7 +374,6 @@ with tab1:
                                     help=k['reliability']['help'],
                                 )
                                 st.markdown(render_badge(k['reliability']['score']), unsafe_allow_html=True)
-
                             with c2:
                                 st.metric(
                                     "⚠️ Congestion Frequency",
@@ -381,7 +382,6 @@ with tab1:
                                 )
                                 st.caption(k['congestion_freq'].get('extra', ''))
                                 st.markdown(render_badge(k['congestion_freq']['score']), unsafe_allow_html=True)
-
                             with c3:
                                 st.metric(
                                     "⏱️ Average Travel Time",
@@ -389,7 +389,6 @@ with tab1:
                                     help=k['avg_tt']['help'],
                                 )
                                 st.markdown(render_badge(k['avg_tt']['score']), unsafe_allow_html=True)
-
                             with c4:
                                 st.metric(
                                     "📈 Planning Time (95th)",
@@ -397,7 +396,6 @@ with tab1:
                                     help=k['planning_time']['help'],
                                 )
                                 st.markdown(render_badge(k['planning_time']['score']), unsafe_allow_html=True)
-
                             with c5:
                                 st.metric(
                                     "🧭 Buffer Index",
@@ -881,7 +879,7 @@ with tab2:
                             ).reset_index().sort_values("Peak", ascending=False)
                             st.dataframe(simple, use_container_width=True)
 
-                        # Cycle Length Recommendations section (moved to separate module)
+                        # Cycle Length Recommendations section
                         render_cycle_length_section(raw)
 
             except Exception as e:
@@ -891,13 +889,11 @@ with tab2:
             st.warning("⚠️ Please select both start and end dates to proceed with the volume analysis.")
 
 # =========================
-# FOOTER (force subtitle + copyright to white in dark mode)
+# FOOTER
 # =========================
 FOOTER = """
 <style>
-  /* Light mode defaults */
   .footer-title { color:#2980b9; margin:0 0 .4rem; font-weight:700; }
-
   .social-btn {
     width: 40px; height: 40px; display:grid; place-items:center; border-radius:50%;
     background:#ffffff; border:1px solid rgba(41,128,185,.25);
@@ -905,7 +901,6 @@ FOOTER = """
     transition: transform .15s ease, box-shadow .15s ease;
   }
   .social-btn:hover { transform: translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.12); }
-
   .website-pill {
     height:40px; display:inline-flex; align-items:center; gap:8px; padding:0 12px;
     border-radius:9999px; background:#ffffff; border:1px solid #2980b9; color:#2980b9;
@@ -922,7 +917,6 @@ FOOTER = """
 
   <h4 class="footer-title">🛣️ Active Transportation & Operations Management Dashboard</h4>
 
-  <!-- These will turn white in dark mode via JavaScript -->
   <p class="footer-sub" style="margin:.1rem 0 0; font-size:1.0rem; color:#0f2f52;">
     Powered by Advanced Machine Learning • Real-time Traffic Intelligence • Intelligent Transportation Solutions (ITS)
   </p>
@@ -944,7 +938,6 @@ FOOTER = """
     </a>
   </div>
 
-  <!-- This will turn white in dark mode via JavaScript -->
   <p class="footer-copy" style="margin:.2rem 0 0; font-size:.9rem; color:#0f2f52;">
     © 2025 ADVANTEC Consulting Engineers, Inc. — "Because We Care"
   </p>
