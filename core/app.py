@@ -287,11 +287,10 @@ with tab1:
                         if origin in node_order and destination in node_order:
                             i0, i1 = node_order.index(origin), node_order.index(destination)
                             if i0 < i1:
-                                # Forward path (bottom → top) → use consecutive segments and keep NB only
+                                # Forward path (bottom → top): NB
                                 path_segments = [f"{node_order[i]} → {node_order[i + 1]}" for i in range(i0, i1)]
                                 seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
                                 if not seg_df.empty:
-                                    # Direction filter: normalize and keep NB rows only
                                     if "direction" in seg_df.columns:
                                         dir_norm = (
                                             seg_df["direction"].astype(str).str.strip().str.lower()
@@ -301,7 +300,7 @@ with tab1:
                                     working_df = seg_df.copy()
                                     route_label = f"{origin} → {destination}"
                             else:
-                                # Reverse path (top → bottom) → build reversed segments and keep SB only
+                                # Reverse path (top → bottom): SB
                                 path_segments = [f"{node_order[i - 1]} → {node_order[i]}" for i in range(i1, i0, -1)]
                                 seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
                                 if not seg_df.empty:
