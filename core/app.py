@@ -421,6 +421,27 @@ with tab1:
                                 if tc:
                                     st.plotly_chart(tc, use_container_width=True)
 
+                            # Optional: Corridor O-D summary table (Hourly)
+                            if not od_series.empty:
+                                st.subheader("🛣️ Corridor O-D Summary (Hourly)")
+                                st.dataframe(
+                                    od_series.rename(
+                                        columns={
+                                            "local_datetime": "Timestamp",
+                                            "average_traveltime": "O-D Travel Time (min)",
+                                            "average_delay": "O-D Delay (s)",
+                                        }
+                                    ),
+                                    use_container_width=True,
+                                )
+
+                        if not raw_data.empty:
+                            worst_delay = (
+                                float(np.nanmax(raw_data["average_delay"]))
+                                if "average_delay" in raw_data and raw_data["average_delay"].notna().any()
+                                else 0.0
+                            )
+
                         if not raw_data.empty:
                             worst_delay = (
                                 float(np.nanmax(raw_data["average_delay"]))
