@@ -130,14 +130,14 @@ def get_performance_rating(score: float):
     Map a 0..100 score to a label + CSS class used by the UI badges.
     """
     if score > 80:
-        return "🟢 Excellent", "badge-excellent"
+        return " Excellent", "badge-excellent"
     if score > 60:
-        return "🔵 Good", "badge-good"
+        return " Good", "badge-good"
     if score > 40:
-        return "🟡 Fair", "badge-fair"
+        return " Fair", "badge-fair"
     if score > 20:
-        return "🟠 Poor", "badge-poor"
-    return "🔴 Critical", "badge-critical"
+        return " Poor", "badge-poor"
+    return " Critical", "badge-critical"
 
 
 # =========================
@@ -227,32 +227,32 @@ def compute_perf_kpis_interpretable(df: pd.DataFrame, high_delay_threshold: floa
             "value": avg_tt,
             "unit": "min",
             "score": score_avg_tt,
-            "help": "Average Travel Time\n\nFormula: mean(travel_time)\nHow to read: Lower is better; typical trip time over the selected period.",
+            "help": "Average Travel Time\n\nWhat: Typical trip time.\nHow: Mean of the O-D travel times that pass your filters.\nExample: (6 + 6 + 7 + 7) / 4 = 6.5 minutes.",
         },
         "planning_time": {
             "value": p95_tt,
             "unit": "min",
             "score": score_plan,
-            "help": "Planning Time (95th percentile)\n\nFormula: P95(travel_time)\nHow to read: Lower is better; time you should plan for so 95% of trips arrive on time.",
+            "help": "Planning Time (95th)\n\nWhat: A safe time so you’re on time about 19 out of 20 trips.\nHow: 95th percentile of the O-D travel times.\nExample: Times 6, 6, 7, 7 → 95th ≈ 7 minutes.",
         },
         "buffer_index": {
             "value": buffer_index,
             "unit": "%",
             "score": score_buffer,
-            "help": "Buffer Index\n\nFormula: (P95(travel_time) − mean(travel_time)) / mean(travel_time) × 100%\nHow to read: Lower is better; extra margin (percentage) needed to be on time 95% of the time.",
+            "help": "Buffer Index\n\nWhat: Extra time to add, as a percent of the average.\nHow: (Planning Time − Average Time) ÷ Average Time × 100%.\nExample: (7 − 6.5) ÷ 6.5 × 100% ≈ 7.7%.",
         },
         "reliability": {
             "value": reliability,
             "unit": "%",
             "score": score_reliability,
-            "help": "Reliability Index\n\nFormula: 100 − Coefficient of Variation of travel time\nCV = std(travel_time)/mean(travel_time) × 100%\nHow to read: Higher is better; 100% is perfectly consistent travel time.",
+            "help": "Reliability Index\n\nWhat: How steady trip times are (higher is better).\nHow: 100 − CV%, where CV = (standard deviation ÷ mean) × 100%. If times are close together, reliability is high.",
         },
         "congestion_freq": {
             "value": cong_freq,
             "unit": "%",
             "score": score_congestion,
             "extra": f"Hours > {high_delay_threshold:.0f}s: {cong_hours}/{total_hours}",
-            "help": f"Congestion Frequency\n\nFormula: hours(delay > {high_delay_threshold:.0f}s) / total_hours × 100%\nHow to read: Lower is better; share of hours with delays above the threshold.",
+            "help": f"Congestion Frequency\n\nWhat: How often delay is above the threshold.\nHow: Hours with delay > {high_delay_threshold:.0f}s ÷ total hours × 100%.\nExample: 0 of 4 hours > {high_delay_threshold:.0f}s → 0%.",
         },
     }
 
@@ -351,7 +351,7 @@ def volume_charts(
         x="local_datetime",
         y="total_volume",
         color="intersection_name",
-        title="📈 Traffic Volume Trends by Intersection",
+        title=" Traffic Volume Trends by Intersection",
         labels={"total_volume": "Volume (vehicles/hour)", "local_datetime": "Date/Time"},
         template="plotly_white",
     )
@@ -392,7 +392,7 @@ def volume_charts(
     )
     fig2.update_layout(
         height=800,
-        title="📊 Volume Distribution & Capacity Analysis",
+        title=" Volume Distribution & Capacity Analysis",
         template="plotly_white",
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
@@ -405,7 +405,7 @@ def volume_charts(
         x="hour",
         y="total_volume",
         color="intersection_name",
-        title="🕐 Average Hourly Volume Patterns",
+        title=" Average Hourly Volume Patterns",
         labels={"total_volume": "Average Volume (vph)", "hour": "Hour of Day"},
         template="plotly_white",
     )
@@ -448,13 +448,13 @@ def date_range_preset_controls(min_date: datetime.date, max_date: datetime.date,
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        if st.button("📅 Last 7 Days", key=f"{key_prefix}_7d"):
+        if st.button(" Last 7 Days", key=f"{key_prefix}_7d"):
             st.session_state[k_range] = (max(min_date, max_date - timedelta(days=7)), max_date)
     with c2:
-        if st.button("📅 Last 30 Days", key=f"{key_prefix}_30d"):
+        if st.button(" Last 30 Days", key=f"{key_prefix}_30d"):
             st.session_state[k_range] = (max(min_date, max_date - timedelta(days=30)), max_date)
     with c3:
-        if st.button("📅 Full Range", key=f"{key_prefix}_full"):
+        if st.button(" Full Range", key=f"{key_prefix}_full"):
             st.session_state[k_range] = (min_date, max_date)
 
     custom = st.date_input(
