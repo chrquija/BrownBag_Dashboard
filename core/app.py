@@ -367,6 +367,13 @@ with tab1:
                             st.subheader("🚦 Corridor Performance Metrics")
                             k = compute_perf_kpis_interpretable(raw_data, HIGH_DELAY_SEC)
 
+                            # Compute Buffer Time in minutes from existing KPIs
+                            buffer_minutes = max(0.0, k["planning_time"]["value"] - k["avg_tt"]["value"])
+                            buffer_help = (
+                                "Extra minutes to leave earlier so you arrive on time 95% of the time.\n"
+                                "Formula: Planning Time (95th) − Average Travel Time."
+                            )
+
                             c1, c2, c3, c4, c5 = st.columns(5)
                             with c1:
                                 st.metric(
@@ -392,7 +399,7 @@ with tab1:
                                 st.markdown(render_badge(k['avg_tt']['score']), unsafe_allow_html=True)
                             with c4:
                                 st.metric(
-                                    "📈 Planning Time (95th)",
+                                    "📈 Planning Time (95t Percentile)",
                                     f"{k['planning_time']['value']:.1f} {k['planning_time']['unit']}",
                                     help=k['planning_time']['help'],
                                 )
@@ -400,9 +407,10 @@ with tab1:
                             with c5:
                                 st.metric(
                                     "🧭 Buffer Index",
-                                    f"{k['buffer_index']['value']:.1f}{k['buffer_index']['unit']}",
-                                    help=k['buffer_index']['help'],
+                                    f"{buffer_minutes:.1f} min",
+                                    help=buffer_help,
                                 )
+                                # Reuse existing buffer-index score badge until backend returns a minutes-based score
                                 st.markdown(render_badge(k['buffer_index']['score']), unsafe_allow_html=True)
 
                         if len(filtered_data) > 1:

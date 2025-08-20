@@ -227,32 +227,32 @@ def compute_perf_kpis_interpretable(df: pd.DataFrame, high_delay_threshold: floa
             "value": avg_tt,
             "unit": "min",
             "score": score_avg_tt,
-            "help": "Average Travel Time\n\nWhat: Typical trip time.\nHow: Mean of the O-D travel times that pass your filters.\nExample: (6 + 6 + 7 + 7) / 4 = 6.5 minutes.",
+            "help": "Average Travel Time\n\nWhat it means: The typical door-to-door trip time for this route with your current filters.\nWhy it exists: Gives a quick sense of what most trips take.\nHow it’s calculated: Average of the hourly O-D trip times.\nFormula: mean(travel_time)\nExample: 6, 6, 7, 7 minutes → (6 + 6 + 7 + 7) / 4 = 6.5 minutes.",
         },
         "planning_time": {
             "value": p95_tt,
             "unit": "min",
             "score": score_plan,
-            "help": "Planning Time (95th)\n\nWhat: A safe time so you’re on time about 19 out of 20 trips.\nHow: 95th percentile of the O-D travel times.\nExample: Times 6, 6, 7, 7 → 95th ≈ 7 minutes.",
+            "help": "Planning Time (95th)\n\nWhat it means: If you take all trip times in current filter, the 95th-percentile is the value such that 95% of the observations are at or below it.\nWhy it exists: Averages can hide variability. Planning Time being 95th percentile captures \"typical worst-case\".\nHow to read it: Realistically, your trip will in total, take this much time. Its the Travel Time you should plan for so you arrive on time about 95% of trips.",
         },
         "buffer_index": {
             "value": buffer_index,
             "unit": "%",
             "score": score_buffer,
-            "help": "Buffer Index\n\nWhat: Extra time to add, as a percent of the average.\nHow: (Planning Time − Average Time) ÷ Average Time × 100%.\nExample: (7 − 6.5) ÷ 6.5 × 100% ≈ 7.7%.",
+            "help": "Buffer Index\n\nWhat it means: Extra time (as a percent) you should add on top of the average to be safe.\nHow it’s calculated: (Planning Time − Average Time) ÷ Average Time × 100%.\nFormula: (P95 − mean) / mean × 100%\nExample: (7.5 − 6.5) ÷ 6.5 × 100% ≈ 15.4%.",
         },
         "reliability": {
             "value": reliability,
             "unit": "%",
             "score": score_reliability,
-            "help": "Reliability Index\n\nWhat: How steady trip times are (higher is better).\nHow: 100 − CV%, where CV = (standard deviation ÷ mean) × 100%. If times are close together, reliability is high.",
+            "help": "Reliability Index\n\nReliability Index (RI) = 100 − CV%, where CV% = (Std Dev / Mean) × 100\n\nWhat it Means: Its your predictability score for travel time\nWhy it exists: An average travel time may not be reliable since the corridor has spiky and unpredictable periods. Higher RI = more dependable and easier arrival time planning.\nHow to read it:\nCalculate CV = Coefficient of Variation (a measure of variability in travel times in this case)\n\nExample (travel time):\nIf mean = 6.5 min and stdev = 0.78 min, then CV = 0.78/6.5 ≈ 12%.\nReliability Index = 100 − CV%, \nso RI ≈ 88%.\n\nReliability Index Thresholds:\n≥ 85% → Excellent (very consistent; CV ≤ ~15%)\n\n70–84% → Good (moderately consistent)\n\n55–69% → Fair (noticeable variability)\n\n< 55% → Poor (highly variable; users can’t plan confidently)",
         },
         "congestion_freq": {
             "value": cong_freq,
             "unit": "%",
             "score": score_congestion,
             "extra": f"Hours > {high_delay_threshold:.0f}s: {cong_hours}/{total_hours}",
-            "help": f"Congestion Frequency\n\nWhat: How often delay is above the threshold.\nHow: Hours with delay > {high_delay_threshold:.0f}s ÷ total hours × 100%.\nExample: 0 of 4 hours > {high_delay_threshold:.0f}s → 0%.",
+            "help": f"Congestion Frequency\n\nWhat it means: How often delay is above the chosen threshold during your selected period.\nWhy it exists: Highlights how frequently you encounter “too much” delay.\nHow it’s calculated: Share of hours with delay above the threshold.\nFormula: hours(delay > threshold) ÷ total_hours × 100%\nExample: 0 of 4 hours above {high_delay_threshold:.0f}s → 0%.",
         },
     }
 
