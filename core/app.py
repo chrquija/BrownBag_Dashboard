@@ -368,7 +368,7 @@ with tab1:
                             end_hour,
                         )
 
-                        # If multiple records exist for the same segment and hour, average them first
+                        # If multiple records exist for the same segment-hour, average them first
                         if not od_hourly.empty and "segment_name" in od_hourly.columns:
                             od_hourly = (
                                 od_hourly.groupby(["local_datetime", "segment_name"], as_index=False)
@@ -376,7 +376,6 @@ with tab1:
                             )
 
                         if not od_hourly.empty:
-                            # Now sum across all segments on the path for each hour → true O-D per hour
                             od_series = (
                                 od_hourly.groupby("local_datetime", as_index=False)
                                 .agg({"average_traveltime": "sum", "average_delay": "sum"})
@@ -387,7 +386,7 @@ with tab1:
                             od_series = pd.DataFrame()  # ensure variable exists
                             raw_data = filtered_data.copy()
 
-                    if raw_data.empty:
+                        if raw_data.empty:
                             st.info("No data in this window.")
                         else:
                             for col in ["average_delay", "average_traveltime", "average_speed"]:
@@ -429,14 +428,14 @@ with tab1:
                                 st.markdown(render_badge(k['avg_tt']['score']), unsafe_allow_html=True)
                             with c4:
                                 st.metric(
-                                    "📈 Planning Time (95t Percentile)",
+                                    "📈 Planning Time (95th Percentile)",
                                     f"{k['planning_time']['value']:.1f} {k['planning_time']['unit']}",
                                     help=k['planning_time']['help'],
                                 )
                                 st.markdown(render_badge(k['planning_time']['score']), unsafe_allow_html=True)
                             with c5:
                                 st.metric(
-                                    "🧭 Buffer Index",
+                                    "🧭 Buffer Time (leave this much earlier)",
                                     f"{buffer_minutes:.1f} min",
                                     help=buffer_help,
                                 )
@@ -486,7 +485,7 @@ with tab1:
                                 if tc:
                                     st.plotly_chart(tc, use_container_width=True)
 
-                            # Optional: Corridor O-D summary table (Hourly)
+                            # Corridor O-D summary table (always hourly)
                             if not od_series.empty:
                                 st.subheader("🔍Which Dates/Times have the highest Travel Time and Delay?")
                                 st.dataframe(
@@ -499,13 +498,6 @@ with tab1:
                                     ),
                                     use_container_width=True,
                                 )
-
-                        if not raw_data.empty:
-                            worst_delay = (
-                                float(np.nanmax(raw_data["average_delay"]))
-                                if "average_delay" in raw_data and raw_data["average_delay"].notna().any()
-                                else 0.0
-                            )
 
                         if not raw_data.empty:
                             worst_delay = (
@@ -974,7 +966,7 @@ with tab2:
                         render_cycle_length_section(raw)
 
             except Exception as e:
-                st.error(f"❌ Error processing volume data: {e}")
+                st.error(f"❌ Error processing traffic data: {e}")
                 st.info("Please check your data sources and try again.")
         else:
             st.warning("⚠️ Please select both start and end dates to proceed with the volume analysis.")
