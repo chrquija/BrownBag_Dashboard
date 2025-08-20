@@ -367,7 +367,16 @@ with tab1:
                             start_hour,
                             end_hour,
                         )
+
+                        # If multiple records exist for the same segment and hour, average them first
+                        if not od_hourly.empty and "segment_name" in od_hourly.columns:
+                            od_hourly = (
+                                od_hourly.groupby(["local_datetime", "segment_name"], as_index=False)
+                                .agg({"average_traveltime": "mean", "average_delay": "mean"})
+                            )
+
                         if not od_hourly.empty:
+                            # Now sum across all segments on the path for each hour → true O-D per hour
                             od_series = (
                                 od_hourly.groupby("local_datetime", as_index=False)
                                 .agg({"average_traveltime": "sum", "average_delay": "sum"})
@@ -378,7 +387,7 @@ with tab1:
                             od_series = pd.DataFrame()  # ensure variable exists
                             raw_data = filtered_data.copy()
 
-                        if raw_data.empty:
+                    if raw_data.empty:
                             st.info("No data in this window.")
                         else:
                             for col in ["average_delay", "average_traveltime", "average_speed"]:
