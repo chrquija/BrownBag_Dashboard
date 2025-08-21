@@ -181,9 +181,21 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# ... existing code ...
 if st.button("🔄 Refresh data (clear cache)", help="Clears cached data and reruns the app"):
-        st.cache_data.clear()
+    # Clear cached data functions
+    st.cache_data.clear()
+
+    # Optional but helpful: reset all UI state so filters don't stick
+    for k in list(st.session_state.keys()):
+        del st.session_state[k]
+
+    # Rerun (new API), with fallback for older Streamlit
+    try:
+        st.rerun()
+    except AttributeError:
         st.experimental_rerun()
+# ... existing code ...
 
 # =========================
 # Tabs
