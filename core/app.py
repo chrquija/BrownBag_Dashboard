@@ -180,14 +180,17 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+
+if st.button("🔄 Refresh data (clear cache)", help="Clears cached data and reruns the app"):
+        st.cache_data.clear()
+        st.experimental_rerun()
+
 # =========================
 # Tabs
 # =========================
 tab1, tab2 = st.tabs(["1️⃣ ITERIS CLEARGUIDE", "2️⃣ KINETIC MOBILITY"])
-with tab
-    if st.button("🔄 Refresh data (clear cache)", help="Clears cached data and reruns the app"):
-        st.cache_data.clear()
-        st.experimental_rerun()
+
+
 
 # -------------------------
 # TAB 1: Performance / Travel Time
