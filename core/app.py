@@ -397,7 +397,7 @@ with tab1:
                                 if col in raw_data:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
 
-                            st.subheader("🚦 Corridor Performance Metrics")
+                            st.subheader("🚦 KPI's (Key Performance Indicators)")
                             k = compute_perf_kpis_interpretable(raw_data, HIGH_DELAY_SEC)
 
                             # Compute Buffer Time in minutes from existing KPIs
