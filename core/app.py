@@ -101,15 +101,10 @@ def normalize_dir(s: pd.Series) -> pd.Series:
     Vectorized normalizer returning only 'nb', 'sb', or 'unk' (dtype=object).
     Safe for mixed dtype inputs; never returns NaN.
     """
-    # convert to string, lower, strip
     ser = s.astype(str).str.lower().str.strip()
-    # normalize punctuation/variants (e.g., n-b, north_bound, etc.)
     ser = ser.str.replace(r"[\s\-\(\)_/\\]+", " ", regex=True)
-
-    # contains checks
     nb_mask = ser.str.contains(r"\b(nb|north|northbound)\b", regex=True)
     sb_mask = ser.str.contains(r"\b(sb|south|southbound)\b", regex=True)
-
     out = pd.Series(
         np.where(nb_mask, "nb", np.where(sb_mask, "sb", "unk")),
         index=ser.index,
@@ -131,6 +126,21 @@ def normalize_dir_value(v) -> str:
     if any(t in s for t in [" sb", "sb ", " southbound", " south "]):
         return "sb"
     return "unk"
+
+# ===== Helpers to use the canonical corridor order only =====
+def _nodes_present_in_data(df: pd.DataFrame) -> set:
+    """Extract distinct node names that appear in segment_name 'A → B' fields."""
+    if "segment_name" not in df.columns or df.empty:
+        return set()
+    parts = df["segment_name"].dropna().str.split("→")
+    left = parts.apply(lambda x: x[0].strip() if isinstance(x, list) and len(x) == 2 else None)
+    right = parts.apply(lambda x: x[1].strip() if isinstance(x, list) and len(x) == 2 else None)
+    return set(pd.concat([left, right], ignore_index=True).dropna().unique())
+
+def _canonical_order_in_data(df: pd.DataFrame) -> list[str]:
+    """Canonical order filtered down to nodes that actually exist in the data."""
+    present = _nodes_present_in_data(df)
+    return [n for n in DESIRED_NODE_ORDER_BOTTOM_UP if n in present]
 
 # =========================
 # CSS
@@ -264,10 +274,10 @@ with tab1:
                 )
                 origin, destination = None, None
                 if od_mode:
-                    node_list_raw = _build_node_order(corridor_df)
-                    known_in_data = [n for n in DESIRED_NODE_ORDER_BOTTOM_UP if n in node_list_raw]
-                    extras = [n for n in node_list_raw if n not in DESIRED_NODE_ORDER_BOTTOM_UP]
-                    node_list = known_in_data + extras
+                    # 🔒 Use canonical order, filtered to nodes present in data
+                    nodes_in_data = _canonical_order_in_data(corridor_df)
+                    # Fallback to auto-discovered only if canonical yields nothing
+                    node_list = nodes_in_data if nodes_in_data else _build_node_order(corridor_df)
 
                     if len(node_list) >= 2:
                         cA, cB = st.columns(2)
@@ -335,22 +345,26 @@ with tab1:
                     path_segments: list[str] = []
 
                     if od_mode and origin and destination:
-                        node_order = _build_node_order(base_df)
-                        if origin in node_order and destination in node_order:
-                            i0, i1 = node_order.index(origin), node_order.index(destination)
+                        # 🔒 Determine path strictly from canonical corridor order
+                        canonical = _canonical_order_in_data(base_df)
+                        if origin in canonical and destination in canonical:
+                            i0, i1 = canonical.index(origin), canonical.index(destination)
+
+                            # intersect with actual segments present
+                            segment_set = set(base_df["segment_name"].dropna().unique().tolist())
 
                             if i0 < i1:
                                 # Forward (bottom → top) = NB
                                 desired_dir = "nb"
-                                path_segments = [f"{node_order[i]} → {node_order[i + 1]}" for i in range(i0, i1)]
+                                planned = [f"{canonical[i]} → {canonical[i + 1]}" for i in range(i0, i1)]
                             elif i0 > i1:
                                 # Reverse (top → bottom) = SB
                                 desired_dir = "sb"
-                                # FIX: iterate downward from origin to destination+1
-                                path_segments = [f"{node_order[i]} → {node_order[i - 1]}" for i in range(i0, i1, -1)]
+                                planned = [f"{canonical[i]} → {canonical[i - 1]}" for i in range(i0, i1, -1)]
                             else:
-                                # same origin/destination; nothing to compute
-                                path_segments = []
+                                planned = []
+
+                            path_segments = [s for s in planned if s in segment_set]
 
                             if path_segments:
                                 seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
@@ -362,13 +376,15 @@ with tab1:
 
                                 working_df = seg_df.copy()
                                 route_label = f"{origin} → {destination}"
+                            else:
+                                st.info("No matching segments found for the selected O-D on the canonical path.")
 
                     # === DEBUG 1: Show direction counts in working_df (after path & direction filter) ===
                     if "direction" in working_df.columns:
                         try:
                             dir_counts_working = normalize_dir(working_df["direction"]).value_counts(dropna=False).to_dict()
                             st.write("Direction counts in working_df:", dir_counts_working)
-                        except Exception as _:
+                        except Exception:
                             st.write("Direction counts in working_df: <unavailable>")
 
                     # Filter + aggregate once for charts/tables at requested granularity
@@ -448,7 +464,7 @@ with tab1:
                                 try:
                                     dir_counts_od = normalize_dir(od_hourly["direction"]).value_counts(dropna=False).to_dict()
                                     st.write("Direction counts in od_hourly (pre-sum):", dir_counts_od)
-                                except Exception as _:
+                                except Exception:
                                     st.write("Direction counts in od_hourly (pre-sum): <unavailable>")
 
                             # Sum across segments for each hour to form the O-D series
@@ -471,11 +487,9 @@ with tab1:
                         if od_mode and origin and destination and desired_dir is not None and path_segments:
                             try:
                                 test_dt = pd.Timestamp("2024-09-01 00:00")
-                                # Use the raw working_df (already filtered to path + direction)
-                                tmp = working_df.copy()
+                                tmp = working_df.copy()  # already filtered to path + direction
                                 if not tmp.empty and "local_datetime" in tmp.columns:
                                     tmp["local_hour"] = pd.to_datetime(tmp["local_datetime"]).dt.floor("H")
-                                    # Coerce numerics
                                     if "average_traveltime" in tmp.columns:
                                         tmp["average_traveltime"] = pd.to_numeric(tmp["average_traveltime"], errors="coerce")
 
@@ -488,16 +502,15 @@ with tab1:
                                         seg_mean = float(v.mean()) if v.notna().any() else np.nan
                                         seg_vals.append((seg, seg_mean))
 
-                                    # Show per-segment values and summed result
                                     st.write("🔎 DEBUG @ 2024-09-01 00:00 (per-segment minutes):",
                                              {seg: (None if pd.isna(val) else round(val, 3)) for seg, val in seg_vals})
                                     valid_vals = [val for _, val in seg_vals if pd.notna(val)]
                                     summed = float(np.sum(valid_vals)) if valid_vals else np.nan
                                     st.write("🔎 DEBUG @ 2024-09-01 00:00 (O-D sum, min):",
                                              (None if pd.isna(summed) else round(summed, 3)))
-                            except Exception as _:
+                            except Exception:
                                 pass
-                        # --- END O-D CONSTRUCTION ---
+                    # --- END O-D CONSTRUCTION ---
 
                         if raw_data.empty:
                             st.info("No data in this window.")
@@ -1078,6 +1091,7 @@ with tab2:
                 st.info("Please check your data sources and try again.")
         else:
             st.warning("⚠️ Please select both start and end dates to proceed with the volume analysis.")
+
 
 # =========================
 # FOOTER
