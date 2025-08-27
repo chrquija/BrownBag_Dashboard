@@ -295,12 +295,25 @@ with tab1:
                                 path_segments = [f"{node_order[i]} → {node_order[i + 1]}" for i in range(i0, i1)]
                                 seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
                                 if not seg_df.empty:
+                                    desired_dir = "nb"
                                     if "direction" in seg_df.columns:
                                         dir_norm = (
-                                            seg_df["direction"].astype(str).str.strip().str.lower()
-                                            .replace({"northbound": "nb", "southbound": "sb"})
+                                            seg_df["direction"]
+                                            .astype(str)
+                                            .str.strip()
+                                            .str.lower()
+                                            .replace({
+                                                "northbound": "nb",
+                                                "north": "nb",
+                                                "n": "nb",
+                                                "nb": "nb",
+                                                "southbound": "sb",
+                                                "south": "sb",
+                                                "s": "sb",
+                                                "sb": "sb",
+                                            })
                                         )
-                                        seg_df = seg_df.loc[dir_norm == "nb"]
+                                        seg_df = seg_df.loc[dir_norm == desired_dir].copy()
                                     working_df = seg_df.copy()
                                     route_label = f"{origin} → {destination}"
                             else:
@@ -308,12 +321,25 @@ with tab1:
                                 path_segments = [f"{node_order[i - 1]} → {node_order[i]}" for i in range(i1, i0, -1)]
                                 seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
                                 if not seg_df.empty:
+                                    desired_dir = "sb"
                                     if "direction" in seg_df.columns:
                                         dir_norm = (
-                                            seg_df["direction"].astype(str).str.strip().str.lower()
-                                            .replace({"northbound": "nb", "southbound": "sb"})
+                                            seg_df["direction"]
+                                            .astype(str)
+                                            .str.strip()
+                                            .str.lower()
+                                            .replace({
+                                                "northbound": "nb",
+                                                "north": "nb",
+                                                "n": "nb",
+                                                "nb": "nb",
+                                                "southbound": "sb",
+                                                "south": "sb",
+                                                "s": "sb",
+                                                "sb": "sb",
+                                            })
                                         )
-                                        seg_df = seg_df.loc[dir_norm == "sb"]
+                                        seg_df = seg_df.loc[dir_norm == desired_dir].copy()
                                     working_df = seg_df.copy()
                                     route_label = f"{origin} → {destination}"
                                 else:
@@ -374,27 +400,52 @@ with tab1:
 
                         # If multiple records exist for the same segment-hour, average them first
                         if not od_hourly.empty and "segment_name" in od_hourly.columns:
-                            od_hourly = (
-                                od_hourly.groupby(["local_datetime", "segment_name"], as_index=False)
-                                .agg({"average_traveltime": "mean", "average_delay": "mean"})
+                            # Guard: ensure we didn't accidentally keep both directions
+                            if "direction" in od_hourly.columns:
+                                dnorm = (
+                                    od_hourly["direction"]
+                                    .astype(str)
+                                    .str.strip()
+                                    .str.lower()
+                                    .replace({
+                                        "northbound": "nb",
+                                        "north": "nb",
+                                        "n": "nb",
+                                        "nb": "nb",
+                                        "southbound": "sb",
+                                        "south": "sb",
+                                        "s": "sb",
+                                        "sb": "sb",
+                                    })
                             )
+                            # Use desired_dir from the O-D selection block if it exists
+                            try:
+                                desired_dir  # noqa
+                                od_hourly = od_hourly.loc[dnorm == desired_dir].copy()
+                            except NameError:
+                                pass
 
-                        if not od_hourly.empty:
+                        od_hourly = (
+                            od_hourly.groupby(["local_datetime", "segment_name"], as_index=False)
+                            .agg({"average_traveltime": "mean", "average_delay": "mean"})
+                        )
+
+                    if not od_hourly.empty:
                             od_series = (
                                 od_hourly.groupby("local_datetime", as_index=False)
                                 .agg({"average_traveltime": "sum", "average_delay": "sum"})
                             )
                             raw_data = od_series.copy()
-                        else:
+                    else:
                             # Fallback to filtered_data if hourly O-D can't be built
                             od_series = pd.DataFrame()  # ensure variable exists
                             raw_data = filtered_data.copy()
 
-                        if raw_data.empty:
+                    if raw_data.empty:
                             st.info("No data in this window.")
-                        else:
-                            for col in ["average_delay", "average_traveltime", "average_speed"]:
-                                if col in raw_data:
+                    else:
+                        for col in ["average_delay", "average_traveltime", "average_speed"]:
+                            if col in raw_data:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
 
                             st.subheader("🚦 KPI's (Key Performance Indicators)")
