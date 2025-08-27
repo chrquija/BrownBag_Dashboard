@@ -286,6 +286,20 @@ with tab1:
                     # O-D subset first
                     working_df = base_df.copy()
                     route_label = "All Segments"
+
+
+                    # Helper to robustly normalize direction values
+                    def _normalize_dir_series(s: pd.Series) -> pd.Series:
+                        s = s.astype(str).str.lower().str.strip()
+                        # collapse whitespace and punctuation
+                        s = s.str.replace(r"[\s\-\(\)_]+", " ", regex=True)
+                        # rule-based contains checks
+                        nb_mask = s.str.contains(r"\b(nb|north|northbound)\b", regex=True)
+                        sb_mask = s.str.contains(r"\b(sb|south|southbound)\b", regex=True)
+                        out = pd.Series(np.where(nb_mask, "nb", np.where(sb_mask, "sb", np.nan)), index=s.index)
+                        return out
+
+
                     if od_mode and origin and destination:
                         node_order = _build_node_order(base_df)
                         if origin in node_order and destination in node_order:
@@ -297,22 +311,7 @@ with tab1:
                                 if not seg_df.empty:
                                     desired_dir = "nb"
                                     if "direction" in seg_df.columns:
-                                        dir_norm = (
-                                            seg_df["direction"]
-                                            .astype(str)
-                                            .str.strip()
-                                            .str.lower()
-                                            .replace({
-                                                "northbound": "nb",
-                                                "north": "nb",
-                                                "n": "nb",
-                                                "nb": "nb",
-                                                "southbound": "sb",
-                                                "south": "sb",
-                                                "s": "sb",
-                                                "sb": "sb",
-                                            })
-                                        )
+                                        dir_norm = _normalize_dir_series(seg_df["direction"])
                                         seg_df = seg_df.loc[dir_norm == desired_dir].copy()
                                     working_df = seg_df.copy()
                                     route_label = f"{origin} → {destination}"
@@ -323,22 +322,7 @@ with tab1:
                                 if not seg_df.empty:
                                     desired_dir = "sb"
                                     if "direction" in seg_df.columns:
-                                        dir_norm = (
-                                            seg_df["direction"]
-                                            .astype(str)
-                                            .str.strip()
-                                            .str.lower()
-                                            .replace({
-                                                "northbound": "nb",
-                                                "north": "nb",
-                                                "n": "nb",
-                                                "nb": "nb",
-                                                "southbound": "sb",
-                                                "south": "sb",
-                                                "s": "sb",
-                                                "sb": "sb",
-                                            })
-                                        )
+                                        dir_norm = _normalize_dir_series(seg_df["direction"])
                                         seg_df = seg_df.loc[dir_norm == desired_dir].copy()
                                     working_df = seg_df.copy()
                                     route_label = f"{origin} → {destination}"
@@ -400,43 +384,28 @@ with tab1:
 
                         # If multiple records exist for the same segment-hour, average them first
                         if not od_hourly.empty and "segment_name" in od_hourly.columns:
-                            # Guard: ensure we didn't accidentally keep both directions
+                            # Final guard: drop any rows not matching desired_dir (handles odd labels)
                             if "direction" in od_hourly.columns:
-                                dnorm = (
-                                    od_hourly["direction"]
-                                    .astype(str)
-                                    .str.strip()
-                                    .str.lower()
-                                    .replace({
-                                        "northbound": "nb",
-                                        "north": "nb",
-                                        "n": "nb",
-                                        "nb": "nb",
-                                        "southbound": "sb",
-                                        "south": "sb",
-                                        "s": "sb",
-                                        "sb": "sb",
-                                    })
+                                dnorm2 = _normalize_dir_series(od_hourly["direction"])
+                                try:
+                                    desired_dir  # noqa
+                                    od_hourly = od_hourly.loc[dnorm2 == desired_dir].copy()
+                                except NameError:
+                                    pass
+
+                            od_hourly = (
+                                od_hourly.groupby(["local_datetime", "segment_name"], as_index=False)
+                                .agg({"average_traveltime": "mean", "average_delay": "mean"})
                             )
-                            # Use desired_dir from the O-D selection block if it exists
-                            try:
-                                desired_dir  # noqa
-                                od_hourly = od_hourly.loc[dnorm == desired_dir].copy()
-                            except NameError:
-                                pass
 
-                        od_hourly = (
-                            od_hourly.groupby(["local_datetime", "segment_name"], as_index=False)
-                            .agg({"average_traveltime": "mean", "average_delay": "mean"})
-                        )
-
-                    if not od_hourly.empty:
+                        # Now sum across segments per hour to form O-D series
+                        if not od_hourly.empty:
                             od_series = (
                                 od_hourly.groupby("local_datetime", as_index=False)
                                 .agg({"average_traveltime": "sum", "average_delay": "sum"})
                             )
                             raw_data = od_series.copy()
-                    else:
+                        else:
                             # Fallback to filtered_data if hourly O-D can't be built
                             od_series = pd.DataFrame()  # ensure variable exists
                             raw_data = filtered_data.copy()
