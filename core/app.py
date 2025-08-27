@@ -283,13 +283,17 @@ with tab1:
                     working_df = base_df.copy()
                     route_label = "All Segments"
 
-                    # Helper to robustly normalize direction values
+                    # Helper to robustly normalize direction values (string-only to avoid dtype issues)
                     def _normalize_dir_series(s: pd.Series) -> pd.Series:
                         s = s.astype(str).str.lower().str.strip()
                         s = s.str.replace(r"[\s\-\(\)_]+", " ", regex=True)
                         nb_mask = s.str.contains(r"\b(nb|north|northbound)\b", regex=True)
                         sb_mask = s.str.contains(r"\b(sb|south|southbound)\b", regex=True)
-                        out = pd.Series(np.where(nb_mask, "nb", np.where(sb_mask, "sb", np.nan)), index=s.index)
+                        out = pd.Series(
+                            np.where(nb_mask, "nb", np.where(sb_mask, "sb", "unk")),
+                            index=s.index,
+                            dtype="object",
+                        )
                         return out
 
                     if od_mode and origin and destination:
@@ -377,11 +381,11 @@ with tab1:
 
                         # If multiple records exist for the same segment-hour, average them first
                         if not od_hourly.empty and "segment_name" in od_hourly.columns:
-                            # Final guard: drop any rows not matching desired_dir (handles odd labels)
+                            # Final guard: ensure only the intended direction remains
                             if "direction" in od_hourly.columns:
                                 dnorm2 = _normalize_dir_series(od_hourly["direction"])
                                 try:
-                                    desired_dir  # noqa
+                                    desired_dir  # set above in O-D block
                                     od_hourly = od_hourly.loc[dnorm2 == desired_dir].copy()
                                 except NameError:
                                     pass
@@ -391,7 +395,7 @@ with tab1:
                                 .agg({"average_traveltime": "mean", "average_delay": "mean"})
                             )
 
-                        # Now sum across segments per hour to form O-D series
+                        # Now sum across segments per hour to form the O-D series
                         if not od_hourly.empty:
                             od_series = (
                                 od_hourly.groupby("local_datetime", as_index=False)
@@ -400,7 +404,7 @@ with tab1:
                             raw_data = od_series.copy()
                         else:
                             # Fallback to filtered_data if hourly O-D can't be built
-                            od_series = pd.DataFrame()  # ensure variable exists
+                            od_series = pd.DataFrame()
                             raw_data = filtered_data.copy()
 
                         if raw_data.empty:
@@ -548,7 +552,7 @@ with tab1:
                             <div class="insight-box">
                                 <h4>💡 Advanced Performance Insights</h4>
                                 <p><strong>📊 Data Overview:</strong> {len(filtered_data):,} {granularity.lower()} observations across {(date_range[1] - date_range[0]).days + 1} days.</p>
-                                <p><strong>🚨 Peaks:</strong> Delay up to {worst_delay:.0f} min • Travel time up to {worst_tt:.1f} min (+{tt_delta:.0f}% vs avg).</p>
+                                <p><strong>🚨 Peaks:</strong> Delay up to {worst_delay:.1f} min • Travel time up to {worst_tt:.1f} min (+{tt_delta:.0f}% vs avg).</p>
                                 <p><strong>🎯 Reliability:</strong> {reliability:.0f}% travel time reliability • Delays > {HIGH_DELAY_SEC}s occur {high_delay_pct:.1f}% of hours.</p>
                                 <p><strong>📌 Action:</strong> {"Critical intervention needed" if worst_delay > (CRITICAL_DELAY_SEC/60.0) else "Optimization recommended" if worst_delay > (HIGH_DELAY_SEC/60.0) else "Monitor trends"}.</p>
                             </div>
