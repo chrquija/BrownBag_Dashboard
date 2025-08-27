@@ -104,7 +104,7 @@ st.markdown("""
         padding: 2rem; border-radius: 15px; margin: 1rem 0 2rem; color: white; text-align: center;
         box-shadow: 0 8px 32px rgba(79, 172, 254, 0.3); backdrop-filter: blur(10px);
     }
-    .context-header h2 { margin: 0; font-size: 2rem; font-weight: 700; }
+    .context-header h2 { margin: 0; font-size: 2rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
     .context-header p { margin: 1rem 0 0; font-size: 1.1rem; opacity: 0.9; font-weight: 300; }
     @media (prefers-color-scheme: dark) { .context-header { background: linear-gradient(135deg, #2980b9 0%, #3498db 100%); } }
 
@@ -180,10 +180,14 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+
+
 # =========================
 # Tabs
 # =========================
 tab1, tab2 = st.tabs(["1️⃣ ITERIS CLEARGUIDE", "2️⃣ KINETIC MOBILITY"])
+
+
 
 # -------------------------
 # TAB 1: Performance / Travel Time
@@ -282,20 +286,6 @@ with tab1:
                     # O-D subset first
                     working_df = base_df.copy()
                     route_label = "All Segments"
-
-                    # Helper to robustly normalize direction values (string-only to avoid dtype issues)
-                    def _normalize_dir_series(s: pd.Series) -> pd.Series:
-                        s = s.astype(str).str.lower().str.strip()
-                        s = s.str.replace(r"[\s\-\(\)_]+", " ", regex=True)
-                        nb_mask = s.str.contains(r"\b(nb|north|northbound)\b", regex=True)
-                        sb_mask = s.str.contains(r"\b(sb|south|southbound)\b", regex=True)
-                        out = pd.Series(
-                            np.where(nb_mask, "nb", np.where(sb_mask, "sb", "unk")),
-                            index=s.index,
-                            dtype="object",
-                        )
-                        return out
-
                     if od_mode and origin and destination:
                         node_order = _build_node_order(base_df)
                         if origin in node_order and destination in node_order:
@@ -305,10 +295,12 @@ with tab1:
                                 path_segments = [f"{node_order[i]} → {node_order[i + 1]}" for i in range(i0, i1)]
                                 seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
                                 if not seg_df.empty:
-                                    desired_dir = "nb"
                                     if "direction" in seg_df.columns:
-                                        dir_norm = _normalize_dir_series(seg_df["direction"])
-                                        seg_df = seg_df.loc[dir_norm == desired_dir].copy()
+                                        dir_norm = (
+                                            seg_df["direction"].astype(str).str.strip().str.lower()
+                                            .replace({"northbound": "nb", "southbound": "sb"})
+                                        )
+                                        seg_df = seg_df.loc[dir_norm == "nb"]
                                     working_df = seg_df.copy()
                                     route_label = f"{origin} → {destination}"
                             else:
@@ -316,16 +308,17 @@ with tab1:
                                 path_segments = [f"{node_order[i - 1]} → {node_order[i]}" for i in range(i1, i0, -1)]
                                 seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
                                 if not seg_df.empty:
-                                    desired_dir = "sb"
                                     if "direction" in seg_df.columns:
-                                        dir_norm = _normalize_dir_series(seg_df["direction"])
-                                        seg_df = seg_df.loc[dir_norm == desired_dir].copy()
+                                        dir_norm = (
+                                            seg_df["direction"].astype(str).str.strip().str.lower()
+                                            .replace({"northbound": "nb", "southbound": "sb"})
+                                        )
+                                        seg_df = seg_df.loc[dir_norm == "sb"]
                                     working_df = seg_df.copy()
                                     route_label = f"{origin} → {destination}"
                                 else:
                                     st.info(
-                                        "Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path."
-                                    )
+                                        "Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path.")
 
                     # Filter + aggregate once for charts/tables at requested granularity
                     filtered_data = process_traffic_data(
@@ -381,21 +374,11 @@ with tab1:
 
                         # If multiple records exist for the same segment-hour, average them first
                         if not od_hourly.empty and "segment_name" in od_hourly.columns:
-                            # Final guard: ensure only the intended direction remains
-                            if "direction" in od_hourly.columns:
-                                dnorm2 = _normalize_dir_series(od_hourly["direction"])
-                                try:
-                                    desired_dir  # set above in O-D block
-                                    od_hourly = od_hourly.loc[dnorm2 == desired_dir].copy()
-                                except NameError:
-                                    pass
-
                             od_hourly = (
                                 od_hourly.groupby(["local_datetime", "segment_name"], as_index=False)
                                 .agg({"average_traveltime": "mean", "average_delay": "mean"})
                             )
 
-                        # Now sum across segments per hour to form the O-D series
                         if not od_hourly.empty:
                             od_series = (
                                 od_hourly.groupby("local_datetime", as_index=False)
@@ -404,7 +387,7 @@ with tab1:
                             raw_data = od_series.copy()
                         else:
                             # Fallback to filtered_data if hourly O-D can't be built
-                            od_series = pd.DataFrame()
+                            od_series = pd.DataFrame()  # ensure variable exists
                             raw_data = filtered_data.copy()
 
                         if raw_data.empty:
@@ -514,7 +497,7 @@ with tab1:
                                         columns={
                                             "local_datetime": "Timestamp",
                                             "average_traveltime": "O-D Travel Time (min)",
-                                            "average_delay": "O-D Delay (min)",
+                                            "average_delay": "O-D Delay (s)",
                                         }
                                     ),
                                     use_container_width=True,
@@ -552,9 +535,9 @@ with tab1:
                             <div class="insight-box">
                                 <h4>💡 Advanced Performance Insights</h4>
                                 <p><strong>📊 Data Overview:</strong> {len(filtered_data):,} {granularity.lower()} observations across {(date_range[1] - date_range[0]).days + 1} days.</p>
-                                <p><strong>🚨 Peaks:</strong> Delay up to {worst_delay:.1f} min • Travel time up to {worst_tt:.1f} min (+{tt_delta:.0f}% vs avg).</p>
+                                <p><strong>🚨 Peaks:</strong> Delay up to {worst_delay:.0f}s ({worst_delay / 60:.1f} min) • Travel time up to {worst_tt:.1f} min (+{tt_delta:.0f}% vs avg).</p>
                                 <p><strong>🎯 Reliability:</strong> {reliability:.0f}% travel time reliability • Delays > {HIGH_DELAY_SEC}s occur {high_delay_pct:.1f}% of hours.</p>
-                                <p><strong>📌 Action:</strong> {"Critical intervention needed" if worst_delay > (CRITICAL_DELAY_SEC/60.0) else "Optimization recommended" if worst_delay > (HIGH_DELAY_SEC/60.0) else "Monitor trends"}.</p>
+                                <p><strong>📌 Action:</strong> {"Critical intervention needed" if worst_delay > CRITICAL_DELAY_SEC else "Optimization recommended" if worst_delay > HIGH_DELAY_SEC else "Monitor trends"}.</p>
                             </div>
                             """,
                                 unsafe_allow_html=True,
@@ -612,8 +595,8 @@ with tab1:
                                     columns={
                                         "segment_name": "Segment",
                                         "direction": "Dir",
-                                        "average_delay_mean": "Avg Delay (min)",
-                                        "average_delay_max": "Peak Delay (min)",
+                                        "average_delay_mean": "Avg Delay (s)",
+                                        "average_delay_max": "Peak Delay (s)",
                                         "average_traveltime_mean": "Avg Time (min)",
                                         "average_traveltime_max": "Peak Time (min)",
                                         "average_speed_mean": "Avg Speed (mph)",
