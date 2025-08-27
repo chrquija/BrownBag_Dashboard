@@ -1,4 +1,5 @@
-# Python
+# app.py
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -90,6 +91,48 @@ def _build_node_order(df: pd.DataFrame) -> list[str]:
     return out
 
 # =========================
+# Robust direction normalization (string-only)
+# Maps anything containing NB/North/Northbound -> "nb"
+# SB/South/Southbound -> "sb"
+# Anything else -> "unk"  (never returns np.nan)
+# =========================
+def normalize_dir(s: pd.Series) -> pd.Series:
+    """
+    Vectorized normalizer returning only 'nb', 'sb', or 'unk' (dtype=object).
+    Safe for mixed dtype inputs; never returns NaN.
+    """
+    # convert to string, lower, strip
+    ser = s.astype(str).str.lower().str.strip()
+    # normalize punctuation/variants (e.g., n-b, north_bound, etc.)
+    ser = ser.str.replace(r"[\s\-\(\)_/\\]+", " ", regex=True)
+
+    # contains checks
+    nb_mask = ser.str.contains(r"\b(nb|north|northbound)\b", regex=True)
+    sb_mask = ser.str.contains(r"\b(sb|south|southbound)\b", regex=True)
+
+    out = pd.Series(
+        np.where(nb_mask, "nb", np.where(sb_mask, "sb", "unk")),
+        index=ser.index,
+        dtype="object",
+    )
+    return out
+
+def normalize_dir_value(v) -> str:
+    """Scalar helper if ever needed; string-only returns."""
+    if v is None:
+        return "unk"
+    try:
+        s = str(v).lower().strip()
+    except Exception:
+        return "unk"
+    s = " ".join([tok for tok in s.replace("-", " ").replace("_", " ").split()])
+    if any(t in s for t in [" nb", "nb ", " northbound", " north "]):
+        return "nb"
+    if any(t in s for t in [" sb", "sb ", " southbound", " south "]):
+        return "sb"
+    return "unk"
+
+# =========================
 # CSS
 # =========================
 st.markdown("""
@@ -104,7 +147,7 @@ st.markdown("""
         padding: 2rem; border-radius: 15px; margin: 1rem 0 2rem; color: white; text-align: center;
         box-shadow: 0 8px 32px rgba(79, 172, 254, 0.3); backdrop-filter: blur(10px);
     }
-    .context-header h2 { margin: 0; font-size: 2rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+    .context-header h2 { margin: 0; font-size: 2rem; font-weight: 700; }
     .context-header p { margin: 1rem 0 0; font-size: 1.1rem; opacity: 0.9; font-weight: 300; }
     @media (prefers-color-scheme: dark) { .context-header { background: linear-gradient(135deg, #2980b9 0%, #3498db 100%); } }
 
@@ -180,14 +223,10 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-
-
 # =========================
 # Tabs
 # =========================
 tab1, tab2 = st.tabs(["1️⃣ ITERIS CLEARGUIDE", "2️⃣ KINETIC MOBILITY"])
-
-
 
 # -------------------------
 # TAB 1: Performance / Travel Time
@@ -283,42 +322,54 @@ with tab1:
                 if base_df.empty:
                     st.warning("⚠️ No data for the selected segment.")
                 else:
-                    # O-D subset first
+                    # --- BEGIN O-D SUBSET & DIRECTION FIX ---
                     working_df = base_df.copy()
                     route_label = "All Segments"
+
+                    # ensure numeric types early to avoid dtype gotchas later
+                    for c in ["average_traveltime", "average_delay", "average_speed"]:
+                        if c in working_df.columns:
+                            working_df[c] = pd.to_numeric(working_df[c], errors="coerce")
+
+                    desired_dir: str | None = None    # ensure scope for later "final guard"
+                    path_segments: list[str] = []
+
                     if od_mode and origin and destination:
                         node_order = _build_node_order(base_df)
                         if origin in node_order and destination in node_order:
                             i0, i1 = node_order.index(origin), node_order.index(destination)
+
                             if i0 < i1:
-                                # Forward path (bottom → top): NB
+                                # Forward (bottom → top) = NB
+                                desired_dir = "nb"
                                 path_segments = [f"{node_order[i]} → {node_order[i + 1]}" for i in range(i0, i1)]
-                                seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
-                                if not seg_df.empty:
-                                    if "direction" in seg_df.columns:
-                                        dir_norm = (
-                                            seg_df["direction"].astype(str).str.strip().str.lower()
-                                            .replace({"northbound": "nb", "southbound": "sb"})
-                                        )
-                                        seg_df = seg_df.loc[dir_norm == "nb"]
-                                    working_df = seg_df.copy()
-                                    route_label = f"{origin} → {destination}"
+                            elif i0 > i1:
+                                # Reverse (top → bottom) = SB
+                                desired_dir = "sb"
+                                # FIX: iterate downward from origin to destination+1
+                                path_segments = [f"{node_order[i]} → {node_order[i - 1]}" for i in range(i0, i1, -1)]
                             else:
-                                # Reverse path (top → bottom): SB
-                                path_segments = [f"{node_order[i - 1]} → {node_order[i]}" for i in range(i1, i0, -1)]
+                                # same origin/destination; nothing to compute
+                                path_segments = []
+
+                            if path_segments:
                                 seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
-                                if not seg_df.empty:
-                                    if "direction" in seg_df.columns:
-                                        dir_norm = (
-                                            seg_df["direction"].astype(str).str.strip().str.lower()
-                                            .replace({"northbound": "nb", "southbound": "sb"})
-                                        )
-                                        seg_df = seg_df.loc[dir_norm == "sb"]
-                                    working_df = seg_df.copy()
-                                    route_label = f"{origin} → {destination}"
-                                else:
-                                    st.info(
-                                        "Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path.")
+
+                                # Filter rows to desired_dir using robust normalizer (avoid NB+SB mix)
+                                if "direction" in seg_df.columns and desired_dir is not None:
+                                    dnorm = normalize_dir(seg_df["direction"])
+                                    seg_df = seg_df.loc[dnorm == desired_dir].copy()
+
+                                working_df = seg_df.copy()
+                                route_label = f"{origin} → {destination}"
+
+                    # === DEBUG 1: Show direction counts in working_df (after path & direction filter) ===
+                    if "direction" in working_df.columns:
+                        try:
+                            dir_counts_working = normalize_dir(working_df["direction"]).value_counts(dropna=False).to_dict()
+                            st.write("Direction counts in working_df:", dir_counts_working)
+                        except Exception as _:
+                            st.write("Direction counts in working_df: <unavailable>")
 
                     # Filter + aggregate once for charts/tables at requested granularity
                     filtered_data = process_traffic_data(
@@ -362,41 +413,95 @@ with tab1:
                             unsafe_allow_html=True,
                         )
 
-                        # Build per-hour O-D series (sum across segments per hour) for KPIs
+                        # =========================
+                        # Build per-hour O-D series (average per segment-hour first, then sum)
+                        # =========================
                         od_hourly = process_traffic_data(
                             working_df,
                             date_range,
-                            "Hourly",  # force hourly to avoid averaging averages
+                            "Hourly",  # force hourly to avoid averaging averages wrongly
                             time_filter,
                             start_hour,
                             end_hour,
                         )
 
-                        # If multiple records exist for the same segment-hour, average them first
-                        if not od_hourly.empty and "segment_name" in od_hourly.columns:
-                            od_hourly = (
-                                od_hourly.groupby(["local_datetime", "segment_name"], as_index=False)
-                                .agg({"average_traveltime": "mean", "average_delay": "mean"})
-                            )
-
                         if not od_hourly.empty:
+                            # Final guard: filter to desired_dir again using robust normalization
+                            if "direction" in od_hourly.columns and desired_dir is not None:
+                                dnorm2 = normalize_dir(od_hourly["direction"])
+                                od_hourly = od_hourly.loc[dnorm2 == desired_dir].copy()
+
+                            # Coerce to numeric BEFORE aggregations
+                            for c in ["average_traveltime", "average_delay"]:
+                                if c in od_hourly.columns:
+                                    od_hourly[c] = pd.to_numeric(od_hourly[c], errors="coerce")
+
+                            # If multiple records exist for same segment & hour, average them first
+                            if "segment_name" in od_hourly.columns and "local_datetime" in od_hourly.columns:
+                                od_hourly = (
+                                    od_hourly.groupby(["local_datetime", "segment_name"], as_index=False)
+                                    .agg({"average_traveltime": "mean", "average_delay": "mean"})
+                                )
+
+                            # === DEBUG 2: Direction counts in od_hourly (post-guard, pre-sum) ===
+                            if "direction" in od_hourly.columns:
+                                try:
+                                    dir_counts_od = normalize_dir(od_hourly["direction"]).value_counts(dropna=False).to_dict()
+                                    st.write("Direction counts in od_hourly (pre-sum):", dir_counts_od)
+                                except Exception as _:
+                                    st.write("Direction counts in od_hourly (pre-sum): <unavailable>")
+
+                            # Sum across segments for each hour to form the O-D series
                             od_series = (
                                 od_hourly.groupby("local_datetime", as_index=False)
                                 .agg({"average_traveltime": "sum", "average_delay": "sum"})
                             )
                             raw_data = od_series.copy()
                         else:
-                            # Fallback to filtered_data if hourly O-D can't be built
-                            od_series = pd.DataFrame()  # ensure variable exists
+                            od_series = pd.DataFrame()
                             raw_data = filtered_data.copy()
+
+                        # Ensure numeric types for downstream KPIs
+                        if not raw_data.empty:
+                            for col in ["average_delay", "average_traveltime", "average_speed"]:
+                                if col in raw_data.columns:
+                                    raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
+
+                        # === DEBUG 3: Specific validation for 2024-09-01 00:00 (Avenue 52 → Village Shopping Ctr) ===
+                        if od_mode and origin and destination and desired_dir is not None and path_segments:
+                            try:
+                                test_dt = pd.Timestamp("2024-09-01 00:00")
+                                # Use the raw working_df (already filtered to path + direction)
+                                tmp = working_df.copy()
+                                if not tmp.empty and "local_datetime" in tmp.columns:
+                                    tmp["local_hour"] = pd.to_datetime(tmp["local_datetime"]).dt.floor("H")
+                                    # Coerce numerics
+                                    if "average_traveltime" in tmp.columns:
+                                        tmp["average_traveltime"] = pd.to_numeric(tmp["average_traveltime"], errors="coerce")
+
+                                    seg_vals = []
+                                    for seg in path_segments:
+                                        v = tmp.loc[
+                                            (tmp["segment_name"] == seg) & (tmp["local_hour"] == test_dt),
+                                            "average_traveltime",
+                                        ].astype(float)
+                                        seg_mean = float(v.mean()) if v.notna().any() else np.nan
+                                        seg_vals.append((seg, seg_mean))
+
+                                    # Show per-segment values and summed result
+                                    st.write("🔎 DEBUG @ 2024-09-01 00:00 (per-segment minutes):",
+                                             {seg: (None if pd.isna(val) else round(val, 3)) for seg, val in seg_vals})
+                                    valid_vals = [val for _, val in seg_vals if pd.notna(val)]
+                                    summed = float(np.sum(valid_vals)) if valid_vals else np.nan
+                                    st.write("🔎 DEBUG @ 2024-09-01 00:00 (O-D sum, min):",
+                                             (None if pd.isna(summed) else round(summed, 3)))
+                            except Exception as _:
+                                pass
+                        # --- END O-D CONSTRUCTION ---
 
                         if raw_data.empty:
                             st.info("No data in this window.")
                         else:
-                            for col in ["average_delay", "average_traveltime", "average_speed"]:
-                                if col in raw_data:
-                                    raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
-
                             st.subheader("🚦 KPI's (Key Performance Indicators)")
                             k = compute_perf_kpis_interpretable(raw_data, HIGH_DELAY_SEC)
 
@@ -443,7 +548,6 @@ with tab1:
                                     f"{buffer_minutes:.1f} min",
                                     help=buffer_help,
                                 )
-                                # Reuse existing buffer-index score badge until backend returns a minutes-based score
                                 st.markdown(render_badge(k['buffer_index']['score']), unsafe_allow_html=True)
 
                         if len(filtered_data) > 1:
@@ -451,10 +555,10 @@ with tab1:
                             v1, v2 = st.columns(2)
 
                             # Use O-D series for trends if available; otherwise fall back
-                            trends_df = od_series if not od_series.empty else filtered_data
+                            trends_df = od_series if 'od_series' in locals() and not od_series.empty else filtered_data
 
                             # If user selected Daily/Weekly/Monthly, aggregate the O-D trends to match the selection
-                            if not od_series.empty and granularity in ("Daily", "Weekly", "Monthly"):
+                            if 'od_series' in locals() and not od_series.empty and granularity in ("Daily", "Weekly", "Monthly"):
                                 tmp = od_series.copy()
                                 tmp["local_datetime"] = pd.to_datetime(tmp["local_datetime"])
                                 if granularity == "Daily":
@@ -490,20 +594,20 @@ with tab1:
                                     st.plotly_chart(tc, use_container_width=True)
 
                             # Corridor O-D summary table (always hourly)
-                            if not od_series.empty:
+                            if 'od_series' in locals() and not od_series.empty:
                                 st.subheader("🔍Which Dates/Times have the highest Travel Time and Delay?")
                                 st.dataframe(
                                     od_series.rename(
                                         columns={
                                             "local_datetime": "Timestamp",
                                             "average_traveltime": "O-D Travel Time (min)",
-                                            "average_delay": "O-D Delay (s)",
+                                            "average_delay": "O-D Delay (min)",  # label as minutes per your note
                                         }
                                     ),
                                     use_container_width=True,
                                 )
 
-                        if not raw_data.empty:
+                        if 'raw_data' in locals() and not raw_data.empty:
                             worst_delay = (
                                 float(np.nanmax(raw_data["average_delay"]))
                                 if "average_delay" in raw_data and raw_data["average_delay"].notna().any()
@@ -535,16 +639,16 @@ with tab1:
                             <div class="insight-box">
                                 <h4>💡 Advanced Performance Insights</h4>
                                 <p><strong>📊 Data Overview:</strong> {len(filtered_data):,} {granularity.lower()} observations across {(date_range[1] - date_range[0]).days + 1} days.</p>
-                                <p><strong>🚨 Peaks:</strong> Delay up to {worst_delay:.0f}s ({worst_delay / 60:.1f} min) • Travel time up to {worst_tt:.1f} min (+{tt_delta:.0f}% vs avg).</p>
+                                <p><strong>🚨 Peaks:</strong> Delay up to {worst_delay:.1f} min • Travel time up to {worst_tt:.1f} min (+{tt_delta:.0f}% vs avg).</p>
                                 <p><strong>🎯 Reliability:</strong> {reliability:.0f}% travel time reliability • Delays > {HIGH_DELAY_SEC}s occur {high_delay_pct:.1f}% of hours.</p>
-                                <p><strong>📌 Action:</strong> {"Critical intervention needed" if worst_delay > CRITICAL_DELAY_SEC else "Optimization recommended" if worst_delay > HIGH_DELAY_SEC else "Monitor trends"}.</p>
+                                <p><strong>📌 Action:</strong> {"Critical intervention needed" if worst_delay > (CRITICAL_DELAY_SEC/60.0) else "Optimization recommended" if worst_delay > (HIGH_DELAY_SEC/60.0) else "Monitor trends"}.</p>
                             </div>
                             """,
                                 unsafe_allow_html=True,
                             )
 
                         st.subheader("🚨 Comprehensive Bottleneck Analysis")
-                        if not raw_data.empty and "segment_name" in working_df.columns:
+                        if 'raw_data' in locals() and not raw_data.empty and "segment_name" in working_df.columns:
                             try:
                                 g = working_df[
                                     (working_df["local_datetime"].dt.date >= date_range[0])
@@ -595,8 +699,8 @@ with tab1:
                                     columns={
                                         "segment_name": "Segment",
                                         "direction": "Dir",
-                                        "average_delay_mean": "Avg Delay (s)",
-                                        "average_delay_max": "Peak Delay (s)",
+                                        "average_delay_mean": "Avg Delay (min)",
+                                        "average_delay_max": "Peak Delay (min)",
                                         "average_traveltime_mean": "Avg Time (min)",
                                         "average_traveltime_max": "Peak Time (min)",
                                         "average_speed_mean": "Avg Speed (mph)",
