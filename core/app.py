@@ -104,7 +104,7 @@ st.markdown("""
         padding: 2rem; border-radius: 15px; margin: 1rem 0 2rem; color: white; text-align: center;
         box-shadow: 0 8px 32px rgba(79, 172, 254, 0.3); backdrop-filter: blur(10px);
     }
-    .context-header h2 { margin: 0; font-size: 2rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+    .context-header h2 { margin: 0; font-size: 2rem; font-weight: 700; }
     .context-header p { margin: 1rem 0 0; font-size: 1.1rem; opacity: 0.9; font-weight: 300; }
     @media (prefers-color-scheme: dark) { .context-header { background: linear-gradient(135deg, #2980b9 0%, #3498db 100%); } }
 
@@ -180,14 +180,10 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-
-
 # =========================
 # Tabs
 # =========================
 tab1, tab2 = st.tabs(["1️⃣ ITERIS CLEARGUIDE", "2️⃣ KINETIC MOBILITY"])
-
-
 
 # -------------------------
 # TAB 1: Performance / Travel Time
@@ -287,18 +283,14 @@ with tab1:
                     working_df = base_df.copy()
                     route_label = "All Segments"
 
-
                     # Helper to robustly normalize direction values
                     def _normalize_dir_series(s: pd.Series) -> pd.Series:
                         s = s.astype(str).str.lower().str.strip()
-                        # collapse whitespace and punctuation
                         s = s.str.replace(r"[\s\-\(\)_]+", " ", regex=True)
-                        # rule-based contains checks
                         nb_mask = s.str.contains(r"\b(nb|north|northbound)\b", regex=True)
                         sb_mask = s.str.contains(r"\b(sb|south|southbound)\b", regex=True)
                         out = pd.Series(np.where(nb_mask, "nb", np.where(sb_mask, "sb", np.nan)), index=s.index)
                         return out
-
 
                     if od_mode and origin and destination:
                         node_order = _build_node_order(base_df)
@@ -328,7 +320,8 @@ with tab1:
                                     route_label = f"{origin} → {destination}"
                                 else:
                                     st.info(
-                                        "Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path.")
+                                        "Selected O-D is opposite to the dataset direction. Add reverse-direction data to analyze that path."
+                                    )
 
                     # Filter + aggregate once for charts/tables at requested granularity
                     filtered_data = process_traffic_data(
@@ -410,11 +403,11 @@ with tab1:
                             od_series = pd.DataFrame()  # ensure variable exists
                             raw_data = filtered_data.copy()
 
-                    if raw_data.empty:
+                        if raw_data.empty:
                             st.info("No data in this window.")
-                    else:
-                        for col in ["average_delay", "average_traveltime", "average_speed"]:
-                            if col in raw_data:
+                        else:
+                            for col in ["average_delay", "average_traveltime", "average_speed"]:
+                                if col in raw_data:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
 
                             st.subheader("🚦 KPI's (Key Performance Indicators)")
@@ -517,7 +510,7 @@ with tab1:
                                         columns={
                                             "local_datetime": "Timestamp",
                                             "average_traveltime": "O-D Travel Time (min)",
-                                            "average_delay": "O-D Delay (s)",
+                                            "average_delay": "O-D Delay (min)",
                                         }
                                     ),
                                     use_container_width=True,
@@ -555,9 +548,9 @@ with tab1:
                             <div class="insight-box">
                                 <h4>💡 Advanced Performance Insights</h4>
                                 <p><strong>📊 Data Overview:</strong> {len(filtered_data):,} {granularity.lower()} observations across {(date_range[1] - date_range[0]).days + 1} days.</p>
-                                <p><strong>🚨 Peaks:</strong> Delay up to {worst_delay:.0f}s ({worst_delay / 60:.1f} min) • Travel time up to {worst_tt:.1f} min (+{tt_delta:.0f}% vs avg).</p>
+                                <p><strong>🚨 Peaks:</strong> Delay up to {worst_delay:.0f} min • Travel time up to {worst_tt:.1f} min (+{tt_delta:.0f}% vs avg).</p>
                                 <p><strong>🎯 Reliability:</strong> {reliability:.0f}% travel time reliability • Delays > {HIGH_DELAY_SEC}s occur {high_delay_pct:.1f}% of hours.</p>
-                                <p><strong>📌 Action:</strong> {"Critical intervention needed" if worst_delay > CRITICAL_DELAY_SEC else "Optimization recommended" if worst_delay > HIGH_DELAY_SEC else "Monitor trends"}.</p>
+                                <p><strong>📌 Action:</strong> {"Critical intervention needed" if worst_delay > (CRITICAL_DELAY_SEC/60.0) else "Optimization recommended" if worst_delay > (HIGH_DELAY_SEC/60.0) else "Monitor trends"}.</p>
                             </div>
                             """,
                                 unsafe_allow_html=True,
@@ -615,8 +608,8 @@ with tab1:
                                     columns={
                                         "segment_name": "Segment",
                                         "direction": "Dir",
-                                        "average_delay_mean": "Avg Delay (s)",
-                                        "average_delay_max": "Peak Delay (s)",
+                                        "average_delay_mean": "Avg Delay (min)",
+                                        "average_delay_max": "Peak Delay (min)",
                                         "average_traveltime_mean": "Avg Time (min)",
                                         "average_traveltime_max": "Peak Time (min)",
                                         "average_speed_mean": "Avg Speed (mph)",
