@@ -90,6 +90,21 @@ def _build_node_order(df: pd.DataFrame) -> list[str]:
             seen.add(n)
     return out
 
+# -------- Canonical helpers (used for robust O-D path building) --------
+def _nodes_present_in_data(df: pd.DataFrame) -> set:
+    """All node labels that appear in any 'A → B' segment_name."""
+    if "segment_name" not in df.columns or df.empty:
+        return set()
+    parts = df["segment_name"].dropna().str.split("→")
+    left = parts.apply(lambda x: x[0].strip() if isinstance(x, list) and len(x) == 2 else None)
+    right = parts.apply(lambda x: x[1].strip() if isinstance(x, list) and len(x) == 2 else None)
+    return set(pd.concat([left, right], ignore_index=True).dropna().unique())
+
+def _canonical_order_in_data(df: pd.DataFrame) -> list[str]:
+    """Canonical corridor order, restricted to nodes that actually exist in the data."""
+    present = _nodes_present_in_data(df)
+    return [n for n in DESIRED_NODE_ORDER_BOTTOM_UP if n in present]
+
 # =========================
 # Robust direction normalization (string-only)
 # Maps anything containing NB/North/Northbound -> "nb"
@@ -105,12 +120,11 @@ def normalize_dir(s: pd.Series) -> pd.Series:
     ser = ser.str.replace(r"[\s\-\(\)_/\\]+", " ", regex=True)
     nb_mask = ser.str.contains(r"\b(nb|north|northbound)\b", regex=True)
     sb_mask = ser.str.contains(r"\b(sb|south|southbound)\b", regex=True)
-    out = pd.Series(
+    return pd.Series(
         np.where(nb_mask, "nb", np.where(sb_mask, "sb", "unk")),
         index=ser.index,
         dtype="object",
     )
-    return out
 
 def normalize_dir_value(v) -> str:
     """Scalar helper if ever needed; string-only returns."""
@@ -126,21 +140,6 @@ def normalize_dir_value(v) -> str:
     if any(t in s for t in [" sb", "sb ", " southbound", " south "]):
         return "sb"
     return "unk"
-
-# ===== Helpers to use the canonical corridor order only =====
-def _nodes_present_in_data(df: pd.DataFrame) -> set:
-    """Extract distinct node names that appear in segment_name 'A → B' fields."""
-    if "segment_name" not in df.columns or df.empty:
-        return set()
-    parts = df["segment_name"].dropna().str.split("→")
-    left = parts.apply(lambda x: x[0].strip() if isinstance(x, list) and len(x) == 2 else None)
-    right = parts.apply(lambda x: x[1].strip() if isinstance(x, list) and len(x) == 2 else None)
-    return set(pd.concat([left, right], ignore_index=True).dropna().unique())
-
-def _canonical_order_in_data(df: pd.DataFrame) -> list[str]:
-    """Canonical order filtered down to nodes that actually exist in the data."""
-    present = _nodes_present_in_data(df)
-    return [n for n in DESIRED_NODE_ORDER_BOTTOM_UP if n in present]
 
 # =========================
 # CSS
@@ -274,10 +273,10 @@ with tab1:
                 )
                 origin, destination = None, None
                 if od_mode:
-                    # 🔒 Use canonical order, filtered to nodes present in data
+                    # Use canonical order but only keep nodes present in the data
                     nodes_in_data = _canonical_order_in_data(corridor_df)
-                    # Fallback to auto-discovered only if canonical yields nothing
-                    node_list = nodes_in_data if nodes_in_data else _build_node_order(corridor_df)
+                    # Fallback to discovered order if canonical matching yields <2 nodes
+                    node_list = nodes_in_data if len(nodes_in_data) >= 2 else _build_node_order(corridor_df)
 
                     if len(node_list) >= 2:
                         cA, cB = st.columns(2)
@@ -332,7 +331,7 @@ with tab1:
                 if base_df.empty:
                     st.warning("⚠️ No data for the selected segment.")
                 else:
-                    # --- BEGIN O-D SUBSET & DIRECTION FIX ---
+                    # --- BEGIN O-D SUBSET (handles NB and SB robustly) ---
                     working_df = base_df.copy()
                     route_label = "All Segments"
 
@@ -345,26 +344,30 @@ with tab1:
                     path_segments: list[str] = []
 
                     if od_mode and origin and destination:
-                        # 🔒 Determine path strictly from canonical corridor order
+                        # Use canonical order (restricted to nodes present)
                         canonical = _canonical_order_in_data(base_df)
+                        # Fallback to discovered order if needed
+                        if len(canonical) < 2:
+                            canonical = _build_node_order(base_df)
+
                         if origin in canonical and destination in canonical:
                             i0, i1 = canonical.index(origin), canonical.index(destination)
 
-                            # intersect with actual segments present
-                            segment_set = set(base_df["segment_name"].dropna().unique().tolist())
-
                             if i0 < i1:
-                                # Forward (bottom → top) = NB
                                 desired_dir = "nb"
-                                planned = [f"{canonical[i]} → {canonical[i + 1]}" for i in range(i0, i1)]
                             elif i0 > i1:
-                                # Reverse (top → bottom) = SB
                                 desired_dir = "sb"
-                                planned = [f"{canonical[i]} → {canonical[i - 1]}" for i in range(i0, i1, -1)]
                             else:
-                                planned = []
+                                desired_dir = None  # same node
 
-                            path_segments = [s for s in planned if s in segment_set]
+                            # IMPORTANT: Always build segment labels in NB orientation (lower index → higher index)
+                            # so we can match datasets that store one segment_name string for both directions.
+                            imin, imax = (i0, i1) if i0 < i1 else (i1, i0)
+                            candidate_segments = [f"{canonical[j]} → {canonical[j + 1]}" for j in range(imin, imax)]
+
+                            # Keep only segments that actually exist in the data
+                            seg_names_in_data = set(base_df["segment_name"].dropna().unique().tolist())
+                            path_segments = [s for s in candidate_segments if s in seg_names_in_data]
 
                             if path_segments:
                                 seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
@@ -377,7 +380,7 @@ with tab1:
                                 working_df = seg_df.copy()
                                 route_label = f"{origin} → {destination}"
                             else:
-                                st.info("No matching segments found for the selected O-D on the canonical path.")
+                                st.info("No matching segments found for the selected O‑D on the canonical path.")
 
                     # === DEBUG 1: Show direction counts in working_df (after path & direction filter) ===
                     if "direction" in working_df.columns:
@@ -483,11 +486,11 @@ with tab1:
                                 if col in raw_data.columns:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
 
-                        # === DEBUG 3: Specific validation for 2024-09-01 00:00 (Avenue 52 → Village Shopping Ctr) ===
+                        # === DEBUG 3: Specific validation for 2024-09-01 00:00 ===
                         if od_mode and origin and destination and desired_dir is not None and path_segments:
                             try:
                                 test_dt = pd.Timestamp("2024-09-01 00:00")
-                                tmp = working_df.copy()  # already filtered to path + direction
+                                tmp = working_df.copy()
                                 if not tmp.empty and "local_datetime" in tmp.columns:
                                     tmp["local_hour"] = pd.to_datetime(tmp["local_datetime"]).dt.floor("H")
                                     if "average_traveltime" in tmp.columns:
@@ -510,7 +513,7 @@ with tab1:
                                              (None if pd.isna(summed) else round(summed, 3)))
                             except Exception:
                                 pass
-                    # --- END O-D CONSTRUCTION ---
+                        # --- END O-D CONSTRUCTION ---
 
                         if raw_data.empty:
                             st.info("No data in this window.")
@@ -620,53 +623,30 @@ with tab1:
                                     use_container_width=True,
                                 )
 
-                        if 'raw_data' in locals() and not raw_data.empty:
-                            worst_delay = (
-                                float(np.nanmax(raw_data["average_delay"]))
-                                if "average_delay" in raw_data and raw_data["average_delay"].notna().any()
-                                else 0.0
-                            )
-                            avg_tt = (
-                                float(np.nanmean(raw_data["average_traveltime"]))
-                                if "average_traveltime" in raw_data and raw_data["average_traveltime"].notna().any()
-                                else 0.0
-                            )
-                            worst_tt = (
-                                float(np.nanmax(raw_data["average_traveltime"]))
-                                if "average_traveltime" in raw_data and raw_data["average_traveltime"].notna().any()
-                                else 0.0
-                            )
-                            tt_delta = ((worst_tt - avg_tt) / avg_tt * 100) if avg_tt > 0 else 0
-                            if avg_tt > 0 and "average_traveltime" in raw_data:
-                                cv_tt = float(np.nanstd(raw_data["average_traveltime"]) / avg_tt) * 100
-                            else:
-                                cv_tt = 0.0
-                            reliability = max(0, 100 - cv_tt)
-                            high_delay_pct = (
-                                (raw_data["average_delay"] > HIGH_DELAY_SEC).mean() * 100
-                                if "average_delay" in raw_data and raw_data["average_delay"].notna().any()
-                                else 0.0
-                            )
-                            st.markdown(
-                                f"""
-                            <div class="insight-box">
-                                <h4>💡 Advanced Performance Insights</h4>
-                                <p><strong>📊 Data Overview:</strong> {len(filtered_data):,} {granularity.lower()} observations across {(date_range[1] - date_range[0]).days + 1} days.</p>
-                                <p><strong>🚨 Peaks:</strong> Delay up to {worst_delay:.1f} min • Travel time up to {worst_tt:.1f} min (+{tt_delta:.0f}% vs avg).</p>
-                                <p><strong>🎯 Reliability:</strong> {reliability:.0f}% travel time reliability • Delays > {HIGH_DELAY_SEC}s occur {high_delay_pct:.1f}% of hours.</p>
-                                <p><strong>📌 Action:</strong> {"Critical intervention needed" if worst_delay > (CRITICAL_DELAY_SEC/60.0) else "Optimization recommended" if worst_delay > (HIGH_DELAY_SEC/60.0) else "Monitor trends"}.</p>
-                            </div>
-                            """,
-                                unsafe_allow_html=True,
-                            )
-
+                        # =========================
+                        # 🚨 Comprehensive Bottleneck Analysis (improved)
+                        # =========================
                         st.subheader("🚨 Comprehensive Bottleneck Analysis")
                         if 'raw_data' in locals() and not raw_data.empty and "segment_name" in working_df.columns:
                             try:
-                                g = working_df[
+                                # Filter to analysis window
+                                analysis_df = working_df[
                                     (working_df["local_datetime"].dt.date >= date_range[0])
                                     & (working_df["local_datetime"].dt.date <= date_range[1])
-                                ].groupby(["segment_name", "direction"]).agg(
+                                ].copy()
+
+                                # Normalize direction for clear grouping
+                                if "direction" in analysis_df.columns:
+                                    analysis_df["dir_norm"] = normalize_dir(analysis_df["direction"])
+                                else:
+                                    analysis_df["dir_norm"] = "unk"
+
+                                # When O-D mode is active, show only the selected direction to avoid NB/SB duplicates
+                                if od_mode and desired_dir is not None:
+                                    analysis_df = analysis_df.loc[analysis_df["dir_norm"] == desired_dir].copy()
+                                    st.caption(f"Filtered to O‑D direction: **{desired_dir.upper()}**")
+
+                                g = analysis_df.groupby(["segment_name", "dir_norm"]).agg(
                                     average_delay_mean=("average_delay", "mean"),
                                     average_delay_max=("average_delay", "max"),
                                     average_traveltime_mean=("average_traveltime", "mean"),
@@ -675,6 +655,12 @@ with tab1:
                                     average_speed_min=("average_speed", "min"),
                                     n=("average_delay", "count"),
                                 ).reset_index()
+
+                                # Display label with arrow so direction is obvious at a glance
+                                arrow_map = {"nb": "↑ NB", "sb": "↓ SB", "unk": "• UNK"}
+                                g["Segment (by Dir)"] = g.apply(
+                                    lambda r: f"{r['segment_name']} ({arrow_map.get(r['dir_norm'], '• UNK')})", axis=1
+                                )
 
                                 def _norm(s):
                                     s = s.astype(float)
@@ -696,8 +682,8 @@ with tab1:
 
                                 final = g[
                                     [
-                                        "segment_name",
-                                        "direction",
+                                        "Segment (by Dir)",       # clear, de-duplicated label
+                                        "dir_norm",
                                         "🎯 Performance Rating",
                                         "Bottleneck_Score",
                                         "average_delay_mean",
@@ -710,8 +696,7 @@ with tab1:
                                     ]
                                 ].rename(
                                     columns={
-                                        "segment_name": "Segment",
-                                        "direction": "Dir",
+                                        "dir_norm": "Dir",
                                         "average_delay_mean": "Avg Delay (min)",
                                         "average_delay_max": "Peak Delay (min)",
                                         "average_traveltime_mean": "Avg Time (min)",
@@ -730,7 +715,8 @@ with tab1:
                                             "🚨 Impact Score",
                                             help="Composite (0–100); higher ⇒ worse",
                                             format="%.1f",
-                                        )
+                                        ),
+                                        "Dir": st.column_config.TextColumn("Dir"),
                                     },
                                 )
 
@@ -1091,7 +1077,6 @@ with tab2:
                 st.info("Please check your data sources and try again.")
         else:
             st.warning("⚠️ Please select both start and end dates to proceed with the volume analysis.")
-
 
 # =========================
 # FOOTER
