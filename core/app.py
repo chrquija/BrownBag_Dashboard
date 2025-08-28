@@ -187,10 +187,8 @@ st.markdown("""
 
     .chart-container { background: rgba(79, 172, 254, 0.05); border-radius: 15px; padding: 1rem; margin: 1rem 0;
         border: 1px solid rgba(79, 172, 254, 0.1); }
-
     .volume-metric { background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(41, 128, 185, 0.1));
         border: 1px solid rgba(52, 152, 219, 0.3); border-radius: 12px; padding: 1rem; margin: 0.5rem 0; }
-
     .modebar { filter: saturate(0.85) opacity(0.9); }
 </style>
 """, unsafe_allow_html=True)
@@ -360,8 +358,7 @@ with tab1:
                             else:
                                 desired_dir = None  # same node
 
-                            # IMPORTANT: Always build segment labels in NB orientation (lower index → higher index)
-                            # so we can match datasets that store one segment_name string for both directions.
+                            # Build segment labels in NB orientation (lower index → higher index)
                             imin, imax = (i0, i1) if i0 < i1 else (i1, i0)
                             candidate_segments = [f"{canonical[j]} → {canonical[j + 1]}" for j in range(imin, imax)]
 
@@ -380,7 +377,7 @@ with tab1:
                                 working_df = seg_df.copy()
                                 route_label = f"{origin} → {destination}"
                             else:
-                                st.info("No matching segments found for the selected O‑D on the canonical path.")
+                                st.info("No matching segments found for the selected O-D on the canonical path.")
 
                     # === DEBUG 1: Show direction counts in working_df (after path & direction filter) ===
                     if "direction" in working_df.columns:
@@ -486,7 +483,7 @@ with tab1:
                                 if col in raw_data.columns:
                                     raw_data[col] = pd.to_numeric(raw_data[col], errors="coerce")
 
-                        # === DEBUG 3: Specific validation for 2024-09-01 00:00 ===
+                        # === DEBUG 3: Specific validation example ===
                         if od_mode and origin and destination and desired_dir is not None and path_segments:
                             try:
                                 test_dt = pd.Timestamp("2024-09-01 00:00")
@@ -617,7 +614,7 @@ with tab1:
                                         columns={
                                             "local_datetime": "Timestamp",
                                             "average_traveltime": "O-D Travel Time (min)",
-                                            "average_delay": "O-D Delay (min)",  # label as minutes per your note
+                                            "average_delay": "O-D Delay (min)",
                                         }
                                     ),
                                     use_container_width=True,
@@ -644,7 +641,7 @@ with tab1:
                                 # When O-D mode is active, show only the selected direction to avoid NB/SB duplicates
                                 if od_mode and desired_dir is not None:
                                     analysis_df = analysis_df.loc[analysis_df["dir_norm"] == desired_dir].copy()
-                                    st.caption(f"Filtered to O‑D direction: **{desired_dir.upper()}**")
+                                    st.caption(f"Filtered to O-D direction: **{desired_dir.upper()}**")
 
                                 g = analysis_df.groupby(["segment_name", "dir_norm"]).agg(
                                     average_delay_mean=("average_delay", "mean"),
@@ -682,7 +679,7 @@ with tab1:
 
                                 final = g[
                                     [
-                                        "Segment (by Dir)",       # clear, de-duplicated label
+                                        "Segment (by Dir)",
                                         "dir_norm",
                                         "🎯 Performance Rating",
                                         "Bottleneck_Score",
@@ -829,34 +826,62 @@ with tab2:
                             unsafe_allow_html=True,
                         )
 
+                        # ---- Windowed raw hourly data for robust KPI math ----
                         raw = base_df[
                             (base_df["local_datetime"].dt.date >= date_range_vol[0])
                             & (base_df["local_datetime"].dt.date <= date_range_vol[1])
                         ].copy()
+                        raw["total_volume"] = pd.to_numeric(raw.get("total_volume", np.nan), errors="coerce")
 
                         st.subheader("🚦 Traffic Demand Performance Indicators")
-                        if raw.empty:
+                        if raw.empty or raw["total_volume"].dropna().empty:
                             st.info("No raw hourly volume in this window.")
                         else:
-                            raw["total_volume"] = pd.to_numeric(raw["total_volume"], errors="coerce")
+                            # --- KPI computations ---
+                            peak = float(np.nanmax(raw["total_volume"])) if raw["total_volume"].notna().any() else 0.0
+                            p95 = (
+                                float(np.nanpercentile(raw["total_volume"].dropna(), 95))
+                                if raw["total_volume"].notna().any()
+                                else 0.0
+                            )
+                            util = (peak / THEORETICAL_LINK_CAPACITY_VPH) * 100 if THEORETICAL_LINK_CAPACITY_VPH else 0.0
+
+                            # Average Demand (depends on user-selected aggregation)
+                            agg_label = {"Hourly": "vph", "Daily": "vpd", "Weekly": "vpw", "Monthly": "vpm"}[granularity_vol]
+                            if granularity_vol == "Hourly":
+                                avg_dem = float(np.nanmean(raw["total_volume"]))
+                            elif granularity_vol == "Daily":
+                                day_sum = raw.groupby(raw["local_datetime"].dt.date)["total_volume"].sum()
+                                avg_dem = float(np.nanmean(day_sum))
+                            elif granularity_vol == "Weekly":
+                                week_sum = raw.groupby(raw["local_datetime"].dt.to_period("W").dt.start_time)["total_volume"].sum()
+                                avg_dem = float(np.nanmean(week_sum))
+                            else:  # Monthly
+                                month_sum = raw.groupby(raw["local_datetime"].dt.to_period("M").dt.start_time)["total_volume"].sum()
+                                avg_dem = float(np.nanmean(month_sum))
+
+                            # Total vehicles in selected period (sum on appropriate base)
+                            # Use hourly base to avoid double-counting; sums are invariant to aggregation.
+                            total_vehicles = float(np.nansum(raw["total_volume"]))
+
+                            # Demand consistency (CV on hourly base for stability)
+                            hourly_avg = float(np.nanmean(raw["total_volume"])) if raw["total_volume"].notna().any() else 0.0
+                            cv = (float(np.nanstd(raw["total_volume"])) / hourly_avg * 100) if hourly_avg > 0 else 0.0
+
+                            # High Volume Hours (hourly threshold), computed on hourly data regardless of chosen aggregation
+                            high_hours = int((raw["total_volume"] > HIGH_VOLUME_THRESHOLD_VPH).sum())
+                            total_hours = int(raw["total_volume"].count())
+                            risk_pct = (high_hours / total_hours * 100) if total_hours > 0 else 0.0
+
                             col1, col2, col3, col4, col5 = st.columns(5)
 
                             with col1:
-                                peak = float(np.nanmax(raw["total_volume"])) if raw["total_volume"].notna().any() else 0
-                                p95 = (
-                                    float(np.nanpercentile(raw["total_volume"].dropna(), 95))
-                                    if raw["total_volume"].notna().any()
-                                    else 0
+                                badge = (
+                                    "badge-critical" if util > 90 else
+                                    "badge-poor" if util > 75 else
+                                    "badge-fair" if util > 60 else
+                                    "badge-good"
                                 )
-                                util = (peak / THEORETICAL_LINK_CAPACITY_VPH) * 100 if THEORETICAL_LINK_CAPACITY_VPH else 0
-                                if util > 90:
-                                    badge = "badge-critical"
-                                elif util > 75:
-                                    badge = "badge-poor"
-                                elif util > 60:
-                                    badge = "badge-fair"
-                                else:
-                                    badge = "badge-good"
                                 st.metric("🔥 Peak Demand", f"{peak:,.0f} vehicles", delta=f"95th: {p95:,.0f}")
                                 st.markdown(
                                     f'<span class="performance-badge {badge}">{util:.0f}% Capacity</span>',
@@ -864,28 +889,42 @@ with tab2:
                                 )
 
                             with col2:
-                                avg = float(np.nanmean(raw["total_volume"])) if raw["total_volume"].notna().any() else 0
-                                med = float(np.nanmedian(raw["total_volume"])) if raw["total_volume"].notna().any() else 0
-                                st.metric("📊 Average Demand", f"{avg:,.0f} vph", delta=f"Median: {med:,.0f}")
-                                avg_util = (avg / THEORETICAL_LINK_CAPACITY_VPH) * 100 if THEORETICAL_LINK_CAPACITY_VPH else 0
-                                badge = "badge-good" if avg_util <= 40 else ("badge-fair" if avg_util <= 60 else "badge-poor")
-                                st.markdown(
-                                    f'<span class="performance-badge {badge}' + f'">{avg_util:.0f}% Avg Util</span>',
-                                    unsafe_allow_html=True,
+                                avg_util = (avg_dem / THEORETICAL_LINK_CAPACITY_VPH) * 100 if granularity_vol == "Hourly" else None
+                                st.metric(
+                                    "📊 Average Demand",
+                                    f"{avg_dem:,.0f} {agg_label}",
+                                    help=(
+                                        "Average traffic demand for the selected period and aggregation.\n"
+                                        "• vph = vehicles per hour\n"
+                                        "• vpd = vehicles per day\n"
+                                        "• vpw = vehicles per week\n"
+                                        "• vpm = vehicles per month"
+                                    ),
                                 )
+                                if avg_util is not None:
+                                    badge = "badge-good" if avg_util <= 40 else ("badge-fair" if avg_util <= 60 else "badge-poor")
+                                    st.markdown(
+                                        f'<span class="performance-badge {badge}">{avg_util:.0f}% Avg Util</span>',
+                                        unsafe_allow_html=True,
+                                    )
 
                             with col3:
-                                ratio = (peak / avg) if avg > 0 else 0
-                                st.metric("📈 Peak/Average Ratio", f"{ratio:.1f}x", help="Higher ⇒ more peaked demand")
-                                badge = "badge-good" if ratio <= 2 else ("badge-fair" if ratio <= 3 else "badge-poor")
-                                state = "Low" if ratio <= 2 else ("Moderate" if ratio <= 3 else "High")
+                                st.metric(
+                                    "🚗 Total Vehicles (period)",
+                                    f"{total_vehicles:,.0f}",
+                                    help="Sum of vehicles across the selected time window (computed from hourly records).",
+                                )
+                                state_badge = (
+                                    "badge-good" if total_vehicles < 0.4 * THEORETICAL_LINK_CAPACITY_VPH * 24
+                                    else "badge-fair" if total_vehicles < 0.7 * THEORETICAL_LINK_CAPACITY_VPH * 24
+                                    else "badge-poor"
+                                )
                                 st.markdown(
-                                    f'<span class="performance-badge {badge}">{state} Peaking</span>',
+                                    f'<span class="performance-badge {state_badge}">Period Total</span>',
                                     unsafe_allow_html=True,
                                 )
 
                             with col4:
-                                cv = (float(np.nanstd(raw["total_volume"])) / avg * 100) if avg > 0 else 0
                                 st.metric("🎯 Demand Consistency", f"{max(0, 100 - cv):.0f}%", delta=f"CV: {cv:.1f}%")
                                 badge = "badge-good" if cv < 30 else ("badge-fair" if cv < 50 else "badge-poor")
                                 label = "Consistent" if cv < 30 else ("Variable" if cv < 50 else "Highly Variable")
@@ -895,55 +934,57 @@ with tab2:
                                 )
 
                             with col5:
-                                high_hours = int((raw["total_volume"] > HIGH_VOLUME_THRESHOLD_VPH).sum())
-                                total_hours = int(raw["total_volume"].count())
-                                risk_pct = (high_hours / total_hours * 100) if total_hours > 0 else 0
-                                st.metric("⚠️ High Volume Hours", f"{high_hours}", delta=f"{risk_pct:.1f}% of time")
-                                if risk_pct > 25:
-                                    badge = "badge-critical"
-                                elif risk_pct > 15:
-                                    badge = "badge-poor"
-                                elif risk_pct > 5:
-                                    badge = "badge-fair"
-                                else:
-                                    badge = "badge-good"
+                                st.metric(
+                                    "⚠️ High Volume Hours",
+                                    f"{high_hours}",
+                                    delta=f"{risk_pct:.1f}% of time",
+                                    help=f"Count of hourly records with total_volume > {HIGH_VOLUME_THRESHOLD_VPH:,} vph.\n"
+                                         "Computed on the underlying hourly data regardless of the aggregation selection.",
+                                )
+                                level_badge = (
+                                    "badge-critical" if risk_pct > 25 else
+                                    "badge-poor" if risk_pct > 15 else
+                                    "badge-fair" if risk_pct > 5 else
+                                    "badge-good"
+                                )
                                 level = (
-                                    "Very High"
-                                    if risk_pct > 25
-                                    else ("High" if risk_pct > 15 else ("Moderate" if risk_pct > 5 else "Low"))
+                                    "Very High" if risk_pct > 25 else
+                                    "High" if risk_pct > 15 else
+                                    "Moderate" if risk_pct > 5 else
+                                    "Low"
                                 )
                                 st.markdown(
-                                    f'<span class="performance-badge {badge}">{level} Risk</span>',
+                                    f'<span class="performance-badge {level_badge}">{level} Risk</span>',
                                     unsafe_allow_html=True,
                                 )
 
+                        # ---------------- Charts (avoid overlap) ----------------
                         st.subheader("📈 Volume Analysis Visualizations")
                         if len(filtered_volume_data) > 1:
-                            chart1, chart2, chart3 = volume_charts(
-                                filtered_volume_data,
-                                THEORETICAL_LINK_CAPACITY_VPH,
-                                HIGH_VOLUME_THRESHOLD_VPH,
-                            )
-                            if chart1:
-                                st.plotly_chart(chart1, use_container_width=True)
+                            # Each chart in its own container ensures Plotly canvases don't overlap
+                            with st.container():
+                                chart1, chart2, chart3 = volume_charts(
+                                    filtered_volume_data,
+                                    THEORETICAL_LINK_CAPACITY_VPH,
+                                    HIGH_VOLUME_THRESHOLD_VPH,
+                                )
+                                if chart1:
+                                    st.plotly_chart(chart1, use_container_width=True)
+
                             colA, colB = st.columns(2)
                             with colA:
-                                if chart3:
-                                    st.plotly_chart(chart3, use_container_width=True)
+                                with st.container():
+                                    if chart3:
+                                        st.plotly_chart(chart3, use_container_width=True)
                             with colB:
-                                if chart2:
-                                    st.plotly_chart(chart2, use_container_width=True)
+                                with st.container():
+                                    if chart2:
+                                        st.plotly_chart(chart2, use_container_width=True)
 
+                        # ---------------- Insights ----------------
                         if not raw.empty:
-                            peak = float(np.nanmax(raw["total_volume"])) if raw["total_volume"].notna().any() else 0
-                            avg = float(np.nanmean(raw["total_volume"])) if raw["total_volume"].notna().any() else 0
-                            ratio = (peak / avg) if avg > 0 else 0
-                            cv = (float(np.nanstd(raw["total_volume"])) / avg * 100) if avg > 0 else 0
-                            util = (peak / THEORETICAL_LINK_CAPACITY_VPH) * 100 if THEORETICAL_LINK_CAPACITY_VPH else 0
-                            high_hours = int((raw["total_volume"] > HIGH_VOLUME_THRESHOLD_VPH).sum())
-                            total_hours = int(raw["total_volume"].count())
-                            risk_pct = (high_hours / total_hours * 100) if total_hours > 0 else 0
-
+                            # reuse already computed pieces
+                            ratio = (peak / hourly_avg) if hourly_avg > 0 else 0.0
                             action = (
                                 "Immediate capacity expansion needed"
                                 if util > 90
@@ -958,15 +999,17 @@ with tab2:
                                 f"""
                             <div class="insight-box">
                                 <h4>💡 Advanced Volume Analysis Insights</h4>
-                                <p><strong>📊 Capacity:</strong> Peak {peak:,.0f} vph ({util:.0f}% of {THEORETICAL_LINK_CAPACITY_VPH:,} vph) • Avg {avg:,.0f} vph.</p>
-                                <p><strong>📈 Demand Shape:</strong> {ratio:.1f}× peak-to-average • Consistency {max(0, 100 - cv):.0f}%.</p>
-                                <p><strong>⚠️ Risk:</strong> >{HIGH_VOLUME_THRESHOLD_VPH:,} vph occurs {high_hours} hours ({risk_pct:.1f}% of period).</p>
+                                <p><strong>📊 Capacity:</strong> Peak {peak:,.0f} vph ({util:.0f}% of {THEORETICAL_LINK_CAPACITY_VPH:,} vph) • Average {hourly_avg:,.0f} vph (hourly base).</p>
+                                <p><strong>🚗 Total Vehicles:</strong> {total_vehicles:,.0f} across the selected window.</p>
+                                <p><strong>📈 Demand Shape:</strong> {ratio:.1f}× peak-to-hourly-avg • Consistency {max(0, 100 - cv):.0f}%.</p>
+                                <p><strong>⚠️ Risk:</strong> >{HIGH_VOLUME_THRESHOLD_VPH:,} vph for {high_hours} hours ({risk_pct:.1f}% of period).</p>
                                 <p><strong>🎯 Recommendation:</strong> {action}.</p>
                             </div>
                             """,
                                 unsafe_allow_html=True,
                             )
 
+                        # ---------------- Risk table ----------------
                         st.subheader("🚨 Intersection Volume & Capacity Risk Analysis")
                         try:
                             g = raw.groupby(["intersection_name", "direction"]).agg(
