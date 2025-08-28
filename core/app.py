@@ -374,7 +374,6 @@ def improved_volume_charts_for_tab2(
     )
 
     fig_trend.update_layout(
-        title=f"Traffic Volume Trend by Intersection — {granularity}",
         xaxis_title="Date/Time",
         yaxis_title=f"Volume ({unit})",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
