@@ -404,7 +404,7 @@ def improved_volume_charts_for_tab2(
     fig_matrix = px.bar(
         mat, y="intersection_name", x=f"Avg {label} Volume",
         orientation="h", text=f"Avg {label} Volume",
-        title=f"Averag$e {label.capitalize()} Volume by Intersection"
+        title=f"Average {label.capitalize()} Vehicle Volume by Intersection"
     )
     fig_matrix.update_traces(texttemplate="%{text:,.0f}", textposition="outside", cliponaxis=False)
     fig_matrix.update_layout(
