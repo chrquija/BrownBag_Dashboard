@@ -197,7 +197,7 @@ st.markdown("""
         🛣️ Active Transportation & Operations Management Dashboard
     </h1>
     <p style="text-align:center; margin-top:1rem; font-size:1.1rem; opacity:0.9;">
-        Advanced Traffic Engineering & Operations Management Platform
+        ADVANTEC CV-SYNC Platform
     </p>
 </div>
 """, unsafe_allow_html=True)
