@@ -778,6 +778,206 @@ with tab1:
                                 )
 
                         # =========================
+                        # 💡 Corridor Insights (added back, intersection-aware)
+                        # =========================
+                        st.subheader("💡 Corridor Insights (Intersections, NB vs SB, Reliability)")
+                        try:
+                            # Window + cleaning
+                            insight_df = working_df[
+                                (working_df["local_datetime"].dt.date >= date_range[0]) &
+                                (working_df["local_datetime"].dt.date <= date_range[1])
+                            ].copy()
+
+                            if insight_df.empty:
+                                st.info("No records available in the selected window for insights.")
+                            else:
+                                # Normalize direction
+                                if "direction" in insight_df.columns:
+                                    insight_df["dir_norm"] = normalize_dir(insight_df["direction"])
+                                else:
+                                    insight_df["dir_norm"] = "unk"
+
+                                # Derive "intersection" from the destination node of "A → B"
+                                if "segment_name" in insight_df.columns:
+                                    def _to_node(val):
+                                        try:
+                                            parts = [p.strip() for p in str(val).split("→")]
+                                            return parts[1] if len(parts) == 2 else str(val)
+                                        except Exception:
+                                            return str(val)
+                                    insight_df["to_node"] = insight_df["segment_name"].apply(_to_node)
+                                else:
+                                    insight_df["to_node"] = "Unknown"
+
+                                # Coerce metrics
+                                for c in ["average_traveltime", "average_delay"]:
+                                    if c in insight_df.columns:
+                                        insight_df[c] = pd.to_numeric(insight_df[c], errors="coerce")
+
+                                # Helpers
+                                def _p95(x):
+                                    x = pd.to_numeric(x, errors="coerce").dropna()
+                                    return float(np.percentile(x, 95)) if len(x) else np.nan
+                                def _share_over(x, thr):
+                                    x = pd.to_numeric(x, errors="coerce").dropna()
+                                    return float((x > thr).sum())/len(x) if len(x) else np.nan
+                                def _norm_col(s):
+                                    s = pd.to_numeric(s, errors="coerce")
+                                    mn, mx = np.nanmin(s), np.nanmax(s)
+                                    if not np.isfinite(mn) or not np.isfinite(mx) or mx <= mn:
+                                        return pd.Series(np.zeros(len(s)), index=s.index)
+                                    return (s - mn) / (mx - mn)
+
+                                # Intersection x Direction summary
+                                grp = insight_df.groupby(["to_node", "dir_norm"]).agg(
+                                    avg_tt=("average_traveltime", "mean"),
+                                    p95_tt=("average_traveltime", _p95),
+                                    avg_delay=("average_delay", "mean"),
+                                    delay_freq=("average_delay", lambda x: _share_over(x, HIGH_DELAY_SEC)),
+                                    n=("average_traveltime", "count"),
+                                ).reset_index()
+
+                                # Reliability metrics
+                                grp["pti"] = grp["p95_tt"] / grp["avg_tt"]  # Planning Time Index
+                                grp["buffer_min"] = grp["p95_tt"] - grp["avg_tt"]
+
+                                # Composite bottleneck score (travel-time centric)
+                                score = (
+                                    0.45 * _norm_col(grp["avg_delay"]) +
+                                    0.35 * _norm_col(grp["buffer_min"]) +
+                                    0.20 * _norm_col(grp["p95_tt"])
+                                ) * 100
+                                grp["Bottleneck_Score_TT"] = score.round(1)
+
+                                # Top bottlenecks (intersection-direction)
+                                top_bn = grp.sort_values("Bottleneck_Score_TT", ascending=False).head(3)
+
+                                # NB vs SB corridor-wide comparison
+                                dir_sum = insight_df.groupby("dir_norm").agg(
+                                    avg_tt=("average_traveltime", "mean"),
+                                    p95_tt=("average_traveltime", _p95),
+                                    avg_delay=("average_delay", "mean"),
+                                    delay_freq=("average_delay", lambda x: _share_over(x, HIGH_DELAY_SEC)),
+                                    n=("average_traveltime", "count"),
+                                ).reset_index()
+
+                                nb_row = dir_sum[dir_sum["dir_norm"] == "nb"]
+                                sb_row = dir_sum[dir_sum["dir_norm"] == "sb"]
+                                def _safe_val(df, col):
+                                    return float(df[col].iloc[0]) if (not df.empty and col in df.columns and pd.notnull(df[col].iloc[0])) else np.nan
+
+                                NB_avg_tt = _safe_val(nb_row, "avg_tt")
+                                SB_avg_tt = _safe_val(sb_row, "avg_tt")
+                                NB_p95 = _safe_val(nb_row, "p95_tt")
+                                SB_p95 = _safe_val(sb_row, "p95_tt")
+                                NB_dfreq = _safe_val(nb_row, "delay_freq")
+                                SB_dfreq = _safe_val(sb_row, "delay_freq")
+
+                                # Corridor basic stats
+                                corr_avg_tt = float(np.nanmean(insight_df["average_traveltime"])) if "average_traveltime" in insight_df else np.nan
+                                corr_p95_tt = _p95(insight_df["average_traveltime"]) if "average_traveltime" in insight_df else np.nan
+                                corr_avg_delay = float(np.nanmean(insight_df["average_delay"])) if "average_delay" in insight_df else np.nan
+
+                                # Persistent reliability issues: PTI >= 1.30 and delay_freq >= 20%, with reasonable sample
+                                persistent = grp[(grp["pti"] >= 1.30) & (grp["delay_freq"] >= 0.20) & (grp["n"] >= 12)]
+                                persistent = persistent.sort_values(["pti", "delay_freq"], ascending=False).head(6)
+
+                                # ------- Render Insight Box -------
+                                def _fmt_pct(x):
+                                    return f"{x*100:.0f}%" if pd.notnull(x) else "—"
+                                def _fmt_min(x):
+                                    return f"{x:.1f} min" if pd.notnull(x) else "—"
+
+                                top_lines = []
+                                for _, r in top_bn.iterrows():
+                                    top_lines.append(
+                                        f"• <b>{r['to_node']}</b> ({r['dir_norm'].upper()}) — "
+                                        f"Avg Delay {_fmt_min(r['avg_delay'])}, PTI {r['pti']:.2f}, "
+                                        f"P95 TT {_fmt_min(r['p95_tt'])}, Score {r['Bottleneck_Score_TT']:.0f}"
+                                    )
+                                top_html = "<br>".join(top_lines) if top_lines else "None detected in this window."
+
+                                persistent_lines = []
+                                for _, r in persistent.iterrows():
+                                    persistent_lines.append(
+                                        f"• <b>{r['to_node']}</b> ({r['dir_norm'].upper()}) — PTI {r['pti']:.2f}, "
+                                        f"Delay >{HIGH_DELAY_SEC}s {_fmt_pct(r['delay_freq'])} of observations (n={int(r['n'])})"
+                                    )
+                                persist_html = "<br>".join(persistent_lines) if persistent_lines else "None flagged at the selected thresholds."
+
+                                nb_vs_sb = (
+                                    f"NB Avg TT {_fmt_min(NB_avg_tt)} vs SB {_fmt_min(SB_avg_tt)} • "
+                                    f"NB P95 {_fmt_min(NB_p95)} vs SB {_fmt_min(SB_p95)} • "
+                                    f"NB Delay> {HIGH_DELAY_SEC}s {_fmt_pct(NB_dfreq)} vs SB {_fmt_pct(SB_dfreq)}"
+                                )
+
+                                st.markdown(
+                                    f"""
+                                    <div class="insight-box">
+                                        <h4>💡 Washington St — Actionable Insights</h4>
+                                        <p><strong>📍 Main Bottlenecks (by intersection & direction):</strong><br>{top_html}</p>
+                                        <p><strong>↕️ Northbound vs Southbound:</strong> {nb_vs_sb}</p>
+                                        <p><strong>🛑 Consistent Reliability Issues (PTI ≥ 1.30 & delay > {HIGH_DELAY_SEC}s ≥ 20%):</strong><br>{persist_html}</p>
+                                        <p><strong>📊 Corridor Stats:</strong> Average TT <b>{_fmt_min(corr_avg_tt)}</b> • P95 TT <b>{_fmt_min(corr_p95_tt)}</b> • Avg Delay <b>{_fmt_min(corr_avg_delay)}</b></p>
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True,
+                                )
+
+                                # Optional: small NB vs SB bar comparison
+                                try:
+                                    comp_df = pd.DataFrame({
+                                        "Direction": ["NB", "SB"],
+                                        "Avg Travel Time (min)": [NB_avg_tt, SB_avg_tt],
+                                        "P95 Travel Time (min)": [NB_p95, SB_p95],
+                                        "Delay > {}s (%)".format(HIGH_DELAY_SEC): [NB_dfreq*100 if pd.notnull(NB_dfreq) else np.nan,
+                                                                                   SB_dfreq*100 if pd.notnull(SB_dfreq) else np.nan]
+                                    })
+                                    colA, colB = st.columns(2)
+                                    with colA:
+                                        fig_comp = px.bar(
+                                            comp_df, x="Direction", y="Avg Travel Time (min)",
+                                            title="NB vs SB — Average Travel Time", text="Avg Travel Time (min)"
+                                        )
+                                        fig_comp.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+                                        fig_comp.update_layout(margin=dict(l=10, r=10, t=50, b=10))
+                                        st.plotly_chart(fig_comp, use_container_width=True)
+                                    with colB:
+                                        fig_comp2 = px.bar(
+                                            comp_df, x="Direction", y="P95 Travel Time (min)",
+                                            title="NB vs SB — 95th Percentile Travel Time", text="P95 Travel Time (min)"
+                                        )
+                                        fig_comp2.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+                                        fig_comp2.update_layout(margin=dict(l=10, r=10, t=50, b=10))
+                                        st.plotly_chart(fig_comp2, use_container_width=True)
+
+                                    # Downloadable intersection-level reliability table
+                                    out_cols = ["to_node", "dir_norm", "avg_tt", "p95_tt", "pti", "buffer_min", "avg_delay", "delay_freq", "n", "Bottleneck_Score_TT"]
+                                    dl = grp[out_cols].rename(columns={
+                                        "to_node": "Intersection",
+                                        "dir_norm": "Dir",
+                                        "avg_tt": "Avg Travel Time (min)",
+                                        "p95_tt": "P95 Travel Time (min)",
+                                        "pti": "PTI (P95/Avg)",
+                                        "buffer_min": "Buffer (min)",
+                                        "avg_delay": "Avg Delay (min)",
+                                        "delay_freq": f"Delay > {HIGH_DELAY_SEC}s (share)",
+                                        "n": "Observations",
+                                        "Bottleneck_Score_TT": "TT Bottleneck Score",
+                                    })
+                                    st.download_button(
+                                        "⬇️ Download Intersection Reliability Table (CSV)",
+                                        data=dl.to_csv(index=False).encode("utf-8"),
+                                        file_name="intersection_reliability_insights.csv",
+                                        mime="text/csv",
+                                    )
+                                except Exception:
+                                    pass
+
+                        except Exception as e:
+                            st.info(f"Insights unavailable: {e}")
+
+                        # =========================
                         # 🚨 Comprehensive Bottleneck Analysis (improved)
                         # =========================
                         st.subheader("🚨 Comprehensive Bottleneck Analysis")
@@ -785,8 +985,8 @@ with tab1:
                             try:
                                 # Filter to analysis window
                                 analysis_df = working_df[
-                                    (working_df["local_datetime"].dt.date >= date_range[0])
-                                    & (working_df["local_datetime"].dt.date <= date_range[1])
+                                    (working_df["local_datetime"].dt.date >= date_range[0]) &
+                                    (working_df["local_datetime"].dt.date <= date_range[1])
                                 ].copy()
 
                                 # Normalize direction for clear grouping
@@ -824,9 +1024,9 @@ with tab1:
                                     return pd.Series(np.zeros(len(s)), index=s.index)
 
                                 score = (
-                                    0.45 * _norm(g["average_delay_max"])
-                                    + 0.35 * _norm(g["average_delay_mean"])
-                                    + 0.20 * _norm(g["average_traveltime_max"])
+                                    0.45 * _norm(g["average_delay_max"]) +
+                                    0.35 * _norm(g["average_delay_mean"]) +
+                                    0.20 * _norm(g["average_traveltime_max"])
                                 ) * 100
                                 g["Bottleneck_Score"] = score.round(1)
 
@@ -985,8 +1185,8 @@ with tab2:
 
                         # ---- Windowed raw hourly data for robust KPI math ----
                         raw = base_df[
-                            (base_df["local_datetime"].dt.date >= date_range_vol[0])
-                            & (base_df["local_datetime"].dt.date <= date_range_vol[1])
+                            (base_df["local_datetime"].dt.date >= date_range_vol[0]) &
+                            (base_df["local_datetime"].dt.date <= date_range_vol[1])
                         ].copy()
                         raw["total_volume"] = pd.to_numeric(raw.get("total_volume", np.nan), errors="coerce")
                         raw["local_datetime"] = pd.to_datetime(raw["local_datetime"])
@@ -1288,9 +1488,9 @@ with tab2:
                             ).replace([np.inf, -np.inf], 0).fillna(0).round(1)
 
                             g["🚨 Risk Score"] = (
-                                0.5 * g["Peak_Capacity_Util"]
-                                + 0.3 * g["Avg_Capacity_Util"]
-                                + 0.2 * (g["Peak_Avg_Ratio"] * 10)
+                                0.5 * g["Peak_Capacity_Util"] +
+                                0.3 * g["Avg_Capacity_Util"] +
+                                0.2 * (g["Peak_Avg_Ratio"] * 10)
                             ).round(1)
 
                             g["⚠️ Risk Level"] = pd.cut(
