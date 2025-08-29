@@ -220,8 +220,9 @@ st.markdown("""
 st.markdown("""
 <div style="background: linear-gradient(135deg, #3498db, #2980b9); color: white; padding: 1.1rem; border-radius: 15px;
     margin: 1rem 0; text-align: center; box-shadow: 0 6px 20px rgba(52, 152, 219, 0.25);">
-    <h3 style="margin:0; font-weight:600;">🔍 Research Question</h3>
-    <p style="margin: 0.45rem 0 0; font-size: 1.0rem;">What are the main bottlenecks on Washington St that most increase travel times?</p>
+    <h3 style="margin:0; font-weight:600;">🔍 Research Questions</h3>
+    <p style="margin: 0.45rem 0 0; font-size: 1.0rem;">What are the main bottlenecks on Washington Street that most increase travel times?</p>
+    <p style="margin: 0.45rem 0 0; font-size: 1.0rem;">Which direction on Washington Street causes the most congestion?</p>
 </div>
 """, unsafe_allow_html=True)
 
