@@ -63,7 +63,7 @@ def _get_status(recommended: str, current: str) -> str:
 
 
 # -------------------------
-# Visual helpers (legend + colors) — now theme-able & colorblind-safe
+# Colorblind‑safe palette (fixed; no theme selector)
 # -------------------------
 CYCLE_ORDER = ["Free mode", "110 sec", "120 sec", "130 sec", "140 sec"]
 THRESHOLD_TEXT = {
@@ -74,98 +74,47 @@ THRESHOLD_TEXT = {
     "Free mode": "< 300 vph",
 }
 
-# Predefined palettes (all high-contrast)
-def _get_palettes(theme: str):
-    """
-    Returns (cycle_colors, status_colors, pattern_map) for the selected theme.
-    Defaults to Okabe–Ito colorblind-safe palette.
-    """
-    if theme == "High Contrast":
-        cycle_colors = {
-            "Free mode": "#808080",  # gray
-            "110 sec": "#1B9E77",    # green
-            "120 sec": "#386CB0",    # blue
-            "130 sec": "#FDC827",    # yellow-gold
-            "140 sec": "#D62728",    # red
-        }
-        status_colors = {"🟢 OPTIMAL": "#1B9E77", "⬆️ INCREASE": "#D62728", "🔽 REDUCE": "#386CB0"}
-    elif theme == "Greens → Red":
-        cycle_colors = {
-            "Free mode": "#9E9E9E",
-            "110 sec": "#2ECC71",
-            "120 sec": "#27AE60",
-            "130 sec": "#E67E22",
-            "140 sec": "#E74C3C",
-        }
-        status_colors = {"🟢 OPTIMAL": "#27AE60", "⬆️ INCREASE": "#E74C3C", "🔽 REDUCE": "#2E86C1"}
-    elif theme == "Monochrome + Accents":
-        cycle_colors = {
-            "Free mode": "#95A5A6",
-            "110 sec": "#34495E",
-            "120 sec": "#2C3E50",
-            "130 sec": "#8E44AD",
-            "140 sec": "#E74C3C",
-        }
-        status_colors = {"🟢 OPTIMAL": "#2ECC71", "⬆️ INCREASE": "#E74C3C", "🔽 REDUCE": "#8E44AD"}
-    else:  # "Colorblind Safe" (Okabe–Ito)
-        cycle_colors = {
-            "Free mode": "#8C8C8C",  # gray
-            "110 sec": "#009E73",    # bluish green
-            "120 sec": "#0072B2",    # blue
-            "130 sec": "#E69F00",    # orange
-            "140 sec": "#D55E00",    # vermillion
-        }
-        status_colors = {"🟢 OPTIMAL": "#009E73", "⬆️ INCREASE": "#D55E00", "🔽 REDUCE": "#0072B2"}
-
-    # Optional hatch patterns to differentiate cycle categories further (supported on bars)
-    pattern_map = {
-        "Free mode": "",   # solid
-        "110 sec": "/",
-        "120 sec": "\\",
-        "130 sec": "x",
-        "140 sec": ".",
-    }
-    return cycle_colors, status_colors, pattern_map
-
-
-def _legend_html(cycle_colors: dict) -> str:
-    """HTML legend for cycle length thresholds, generated from active palette."""
-    pill_items = []
-    for label in ["140 sec", "130 sec", "120 sec", "110 sec", "Free mode"]:
-        color = cycle_colors.get(label, "#7f8c8d")
-        text = THRESHOLD_TEXT[label]
-        pill_items.append(
-            f'<span style="display:inline-flex;align-items:center;margin:.25rem .5rem;'
-            f'padding:.3rem .6rem;border-radius:999px;background:{color};color:#fff;'
-            f'font-weight:700;font-size:.85rem;">{label}</span>'
-            f'<span style="margin-right:1rem;opacity:.85;font-size:.9rem">{text}</span>'
-        )
-    return (
-        '<div style="border:1px solid rgba(79,172,254,.25);padding:.6rem 1rem;border-radius:12px;'
-        'background:linear-gradient(135deg, rgba(79,172,254,.08), rgba(0,242,254,.06));'
-        'box-shadow:0 8px 24px rgba(79,172,254,.08);margin-top:.25rem;">'
-        '<div style="font-weight:700;margin-bottom:.35rem;color:#1e3c72;">Cycle Length Thresholds</div>'
-        + "".join(pill_items) +
-        '</div>'
-    )
-
-
-def _sec_value(label: str) -> int:
-    """Map label to numeric seconds for sorting/plotting."""
-    return int(label.split()[0]) if label != "Free mode" else 0
+# Okabe–Ito + brighter sky‑blue for readability
+CYCLE_COLORS = {
+    "Free mode": "#9A9A9A",   # neutral gray (slightly brighter)
+    "110 sec":  "#009E73",    # bluish‑green
+    "120 sec":  "#56B4E9",    # sky blue (brighter than #0072B2)
+    "130 sec":  "#E69F00",    # orange
+    "140 sec":  "#D55E00",    # vermillion
+}
+STATUS_COLORS = {
+    "🟢 OPTIMAL": "#009E73",   # green
+    "⬆️ INCREASE": "#D55E00",  # red‑orange (needs longer cycle)
+    "🔽 REDUCE":   "#56B4E9",  # sky blue (needs shorter cycle)
+}
+PATTERN_MAP = {
+    "Free mode": "",
+    "110 sec": "/",
+    "120 sec": "\\",
+    "130 sec": "x",
+    "140 sec": ".",
+}
 
 
 # -------------------------
-# KPI cards (boxed, theme-aware)
+# Legend (dark‑mode aware) + KPI CSS (contrast‑safe)
 # -------------------------
-def _inject_kpi_css():
+def _inject_component_css():
     st.markdown(
         """
 <style>
-:root {
+/* ---------- Light defaults ---------- */
+:root{
+  /* Legend */
+  --legend-bg: rgba(15,47,82,.06);
+  --legend-border: rgba(79,172,254,.28);
+  --legend-title: #0f2f52;
+
+  /* KPI tiles */
   --kpi-bg: linear-gradient(135deg, rgba(79,172,254,.06), rgba(0,242,254,.04));
   --kpi-border: rgba(79,172,254,.28);
   --kpi-text: #0f2f52;
+  --kpi-title: #0f2f52;
   --kpi-muted: rgba(15,47,82,.78);
   --kpi-shadow: 0 8px 20px rgba(79,172,254,.10);
   --kpi-good: #2ecc71;
@@ -173,29 +122,103 @@ def _inject_kpi_css():
   --kpi-bad: #e74c3c;
   --kpi-pill: rgba(255,255,255,.65);
 }
-html.dark, [data-theme="dark"], [data-base-theme="dark"], body[data-theme="dark"] {
-  --kpi-bg: rgba(255,255,255,.06);
-  --kpi-border: rgba(126,195,255,.30);
+
+/* ---------- Dark mode overrides ---------- */
+html.dark, [data-theme="dark"], [data-base-theme="dark"], body[data-theme="dark"]{
+  --legend-bg: rgba(255,255,255,.08);
+  --legend-border: rgba(255,255,255,.18);
+  --legend-title: #ffffff;
+
+  --kpi-bg: rgba(255,255,255,.07);
+  --kpi-border: rgba(255,255,255,.22);
   --kpi-text: #ffffff;
-  --kpi-muted: rgba(255,255,255,.85);
+  --kpi-title: #EAF6FF;
+  --kpi-muted: rgba(255,255,255,.80);
   --kpi-shadow: 0 10px 26px rgba(0,0,0,.35);
   --kpi-pill: rgba(255,255,255,.10);
 }
-.cvag-kpi-grid { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:12px; margin:4px 0 10px; }
+
+/* Fallback for environments that only set prefers-color-scheme */
+@media (prefers-color-scheme: dark){
+  :root{
+    --legend-bg: rgba(255,255,255,.08);
+    --legend-border: rgba(255,255,255,.18);
+    --legend-title: #ffffff;
+
+    --kpi-bg: rgba(255,255,255,.07);
+    --kpi-border: rgba(255,255,255,.22);
+    --kpi-text: #ffffff;
+    --kpi-title: #EAF6FF;
+    --kpi-muted: rgba(255,255,255,.80);
+    --kpi-shadow: 0 10px 26px rgba(0,0,0,.35);
+    --kpi-pill: rgba(255,255,255,.10);
+  }
+}
+
+/* Legend block */
+.cvag-legend{
+  border:1px solid var(--legend-border);
+  background: var(--legend-bg);
+  border-radius:12px;
+  padding:.6rem 1rem;
+  box-shadow:0 8px 24px rgba(0,0,0,.10);
+  margin-top:.25rem;
+}
+.cvag-legend-title{
+  font-weight:800;
+  color:var(--legend-title);
+  margin-bottom:.35rem;
+}
+
+/* KPI cards */
+.cvag-kpi-grid{
+  display:grid; gap:12px; margin:4px 0 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
 @media (max-width:1500px){ .cvag-kpi-grid{ grid-template-columns:repeat(3,1fr);} }
 @media (max-width:900px){ .cvag-kpi-grid{ grid-template-columns:repeat(2,1fr);} }
 @media (max-width:600px){ .cvag-kpi-grid{ grid-template-columns:1fr;} }
-.cvag-kpi-card { border-radius:16px; padding:14px 16px; background:var(--kpi-bg); border:1px solid var(--kpi-border); box-shadow:var(--kpi-shadow); color:var(--kpi-text); }
-.cvag-kpi-title { font-weight:700; font-size:.95rem; letter-spacing:.2px; display:flex; align-items:center; gap:.5rem; opacity:.95; }
-.cvag-kpi-value { font-size:2.0rem; line-height:1.05; font-weight:800; margin-top:.25rem; letter-spacing:.3px; }
-.cvag-kpi-delta { margin-top:.15rem; font-size:.95rem; font-weight:600; opacity:.95; }
-.cvag-kpi-delta.good{ color:var(--kpi-good);} .cvag-kpi-delta.warn{ color:var(--kpi-warn);} .cvag-kpi-delta.bad{ color:var(--kpi-bad);} .cvag-kpi-delta.neutral{ color:var(--kpi-muted);}
-.cvag-kpi-foot { margin-top:.35rem; font-size:.85rem; color:var(--kpi-muted); }
-.cvag-pill { display:inline-flex; align-items:center; gap:.4rem; padding:.25rem .55rem; border-radius:999px; background:var(--kpi-pill); font-weight:700; font-size:.82rem; }
+
+.cvag-kpi-card{
+  border-radius:16px; padding:14px 16px;
+  background:var(--kpi-bg);
+  border:1px solid var(--kpi-border);
+  box-shadow:var(--kpi-shadow);
+  color:var(--kpi-text);
+}
+.cvag-kpi-title{ font-weight:800; font-size:.95rem; letter-spacing:.2px; color:var(--kpi-title); }
+.cvag-kpi-value{ font-size:2.0rem; line-height:1.05; font-weight:800; margin-top:.25rem; letter-spacing:.3px; }
+.cvag-kpi-delta{ margin-top:.15rem; font-size:.95rem; font-weight:700; }
+.cvag-kpi-delta.good{ color:#2ECC71; }
+.cvag-kpi-delta.warn{ color:#F39C12; }
+.cvag-kpi-delta.bad{  color:#E74C3C; }
+.cvag-kpi-delta.neutral{ color:var(--kpi-muted); }
+.cvag-kpi-foot{ margin-top:.35rem; font-size:.85rem; color:var(--kpi-muted); }
+.cvag-pill{ display:inline-flex; align-items:center; gap:.4rem; padding:.25rem .55rem; border-radius:999px; background:var(--kpi-pill); font-weight:700; font-size:.82rem; }
 </style>
         """,
         unsafe_allow_html=True,
     )
+
+
+def _legend_html(cycle_colors: dict) -> str:
+    """Dark‑mode aware legend using CSS variables (no hardcoded dark blue)."""
+    pill_items = []
+    for label in ["140 sec", "130 sec", "120 sec", "110 sec", "Free mode"]:
+        color = cycle_colors.get(label, "#9A9A9A")
+        text = THRESHOLD_TEXT[label]
+        pill_items.append(
+            f'<span style="display:inline-flex;align-items:center;margin:.25rem .5rem;'
+            f'padding:.3rem .6rem;border-radius:999px;background:{color};color:#fff;'
+            f'font-weight:800;font-size:.85rem;">{label}</span>'
+            f'<span style="margin-right:1rem;opacity:.85;font-size:.9rem">{text}</span>'
+        )
+    return f'''
+      <div class="cvag-legend">
+        <div class="cvag-legend-title">Cycle Length Thresholds</div>
+        {''.join(pill_items)}
+      </div>
+    '''
 
 
 def _kpi_card(title: str, value_html: str, delta_text: str, tone: str = "neutral",
@@ -217,7 +240,7 @@ def _kpi_card(title: str, value_html: str, delta_text: str, tone: str = "neutral
 # Main renderer
 # -------------------------
 def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") -> None:
-    """Render the enhanced Cycle Length Recommendations section with improved color accessibility."""
+    """Render the Cycle Length Recommendations section with colorblind‑safe colors and dark‑mode contrast."""
 
     if raw is None or raw.empty:
         st.info("No hourly volume data available for cycle length recommendations.")
@@ -225,6 +248,9 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     if "local_datetime" not in raw.columns or "total_volume" not in raw.columns:
         st.info("Required columns not found: 'local_datetime', 'total_volume'.")
         return
+
+    # Inject CSS (legend + KPI)
+    _inject_component_css()
 
     # ---- Context values for header ----
     raw = raw.copy()
@@ -284,8 +310,11 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     )
     st.markdown(header_html, unsafe_allow_html=True)
 
+    # Legend (fixed colorblind‑safe palette; dark‑mode aware)
+    st.markdown(_legend_html(CYCLE_COLORS), unsafe_allow_html=True)
+
     # Controls
-    c1, c2, c3 = st.columns([2, 1.6, 1.5])
+    c1, c2 = st.columns([2, 1.6])
     with c1:
         time_period = st.selectbox(
             "🕐 Time Period",
@@ -302,20 +331,6 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
             help="Cycle used currently; compared against recommendations",
             key=f"{key_prefix}_current",
         )
-    with c3:
-        theme_choice = st.selectbox(
-            "🎨 Color Theme",
-            ["Colorblind Safe", "High Contrast", "Greens → Red", "Monochrome + Accents"],
-            index=0,
-            help="Pick a palette that's easy to read for presentations and printouts",
-            key=f"{key_prefix}_theme",
-        )
-
-    # Resolve palettes & patterns from theme
-    CYCLE_COLORS, STATUS_COLORS, PATTERN_MAP = _get_palettes(theme_choice)
-
-    # Legend (now uses active palette)
-    st.markdown(_legend_html(CYCLE_COLORS), unsafe_allow_html=True)
 
     # Time period filtering
     period_map = {"AM (05:00-10:00)": "AM", "MD (11:00-15:00)": "MD", "PM (16:00-20:00)": "PM", "All Day": "ALL"}
@@ -338,7 +353,7 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     hourly["CVAG Recommendation"] = hourly["Volume"].apply(get_hourly_cycle_length)
     hourly["Status"] = hourly["CVAG Recommendation"].apply(lambda rec: _get_status(rec, current_cycle))
     hourly["Hour"] = hourly["hour"].apply(lambda x: f"{x:02d}:00")
-    hourly["Rec (sec)"] = hourly["CVAG Recommendation"].apply(_sec_value)
+    hourly["Rec (sec)"] = hourly["CVAG Recommendation"].apply(lambda s: int(s.split()[0]) if s!="Free mode" else 0)
 
     # --- KPI calculations ---
     total_hours = len(hourly)
@@ -374,10 +389,8 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
         return ", ".join(lst[:max_items]) + tail
 
     # -------------------------
-    # BOXED KPIs (card grid)
+    # BOXED KPIs (card grid) — contrast‑safe
     # -------------------------
-    _inject_kpi_css()
-
     # Tones for quick visual meaning
     system_eff = (optimal_hours / total_hours * 100) if total_hours else 0
     tone_eff = "good" if system_eff >= 80 else ("warn" if system_eff >= 60 else "bad")
@@ -400,11 +413,11 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
     st.markdown(cards_html, unsafe_allow_html=True)
 
     # -------------------------
-    # Charts
+    # Charts (transparent bg, colorblind‑safe)
     # -------------------------
     ch1, ch2 = st.columns([2.2, 1.8])
+
     with ch1:
-        # Bar chart colored by recommended cycle (palette + patterns + outlines)
         fig = px.bar(
             hourly.sort_values("hour"),
             x="Hour",
@@ -416,13 +429,12 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
             labels={"Volume": "Avg Volume (vph)", "Hour": "Hour of Day"},
             template="simple_white",
         )
-        # Outline bars to separate hues; apply hatch patterns per category (optional but helpful)
+        # Bar styling for separation + optional patterns
         for tr in fig.data:
             tr.update(marker_line_color="rgba(0,0,0,0.30)", marker_line_width=0.7)
             if tr.name in PATTERN_MAP:
                 tr.update(marker_pattern=dict(shape=PATTERN_MAP[tr.name], size=4, solidity=0.25, fillmode="overlay"))
-
-        # Overlay markers for status (color + shape)
+        # Status markers (color + shape)
         status_symbols = {"🟢 OPTIMAL": "circle", "⬆️ INCREASE": "triangle-up", "🔽 REDUCE": "triangle-down"}
         fig.add_trace(
             go.Scatter(
@@ -439,19 +451,19 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
                 hovertemplate="Hour=%{x}<br>Volume=%{y:.0f}<extra></extra>",
             )
         )
-
         fig.update_layout(
             height=420,
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             margin=dict(l=10, r=10, t=50, b=10),
             bargap=0.15,
+            paper_bgcolor="rgba(0,0,0,0)",  # transparent for Streamlit themes
+            plot_bgcolor="rgba(0,0,0,0)",
         )
         fig.update_xaxes(showgrid=False)
-        fig.update_yaxes(gridcolor="rgba(0,0,0,0.08)")
+        fig.update_yaxes(gridcolor="rgba(0,0,0,0.10)")
         st.plotly_chart(fig, use_container_width=True)
 
     with ch2:
-        # Pie: Hours by Status (colors from the active theme)
         status_counts = hourly["Status"].value_counts().reindex(["🟢 OPTIMAL", "⬆️ INCREASE", "🔽 REDUCE"], fill_value=0)
         pie = px.pie(
             names=status_counts.index,
@@ -467,7 +479,12 @@ def render_cycle_length_section(raw: pd.DataFrame, key_prefix: str = "cycle") ->
             template="simple_white",
         )
         pie.update_traces(textposition="inside", textinfo="label+percent")
-        pie.update_layout(height=420, margin=dict(l=10, r=10, t=50, b=10))
+        pie.update_layout(
+            height=420,
+            margin=dict(l=10, r=10, t=50, b=10),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
         st.plotly_chart(pie, use_container_width=True)
 
     # Stylized table
