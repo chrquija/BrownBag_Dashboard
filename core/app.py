@@ -197,7 +197,7 @@ st.markdown("""
         🛣️ Active Transportation & Operations Management Dashboard
     </h1>
     <p style="text-align:center; margin-top:1rem; font-size:1.1rem; opacity:0.9;">
-        ADVANTEC CV-SYNC Platform
+        From Data to Decisions: Itelligent Traffic Management for CVAG
     </p>
 </div>
 """, unsafe_allow_html=True)
