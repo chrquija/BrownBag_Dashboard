@@ -1242,7 +1242,7 @@ with tab2:
                                 st.markdown(
                                     f"""
                                     <div class="insight-box">
-                                        <h4>💡 Advanced Volume Analysis Insights</h4>
+                                        <h4>💡 Volume Analysis Insights</h4>
                                         <p><strong>📊 Capacity:</strong> Peak <b>{peak_val:,.0f} {unit}</b> on <b>{peak_when}</b>
                                            ({peak_util_pct:.0f}% of scaled capacity) • 95th percentile <b>{p95_val:,.0f} {unit}</b> ({p95_util_pct:.0f}% of capacity).</p>
                                         <p><strong>🚗 Typical {label.capitalize()} Volume:</strong> Average <b>{avg_val:,.0f} {unit}</b> •
