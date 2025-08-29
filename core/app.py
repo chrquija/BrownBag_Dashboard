@@ -211,7 +211,7 @@ st.markdown("""
     margin: 1.25rem 0; line-height: 1.7; border: 1px solid rgba(79,172,254,0.2); backdrop-filter: blur(8px);
 ">
     <div style="text-align:center; margin-bottom: 0.5rem;">
-        <strong style="font-size: 1.2rem; color: #2980b9;">🚀 The ADVANTEC CV-SYNC Platform</strong>
+        <strong style="font-size: 1.2rem; color: #2980b9;">🚀 The ADVANTEC Platform</strong>
     </div>
     <p>Leverages <strong>millions of data points</strong> trained on advanced Machine Learning algorithms to optimize traffic flow, reduce travel time, minimize fuel consumption, and decrease greenhouse gas emissions across the transportation network.</p>
     <p><strong>Key Capabilities:</strong> Real-time anomaly detection • Intelligent cycle length optimization • Predictive traffic modeling • Performance analytics</p>
