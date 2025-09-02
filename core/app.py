@@ -185,6 +185,22 @@ st.markdown("""
     .volume-metric { background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(41, 128, 185, 0.1));
         border: 1px solid rgba(52, 152, 219, 0.3); border-radius: 12px; padding: 1rem; margin: 0.5rem 0; }
     .modebar { filter: saturate(0.85) opacity(0.9); }
+    
+    /* Make all expander headers larger and bolder */
+    details[data-testid="stExpander"] > summary,
+    .streamlit-expanderHeader {
+        font-size: 1.15rem !important;
+        font-weight: 700 !important;
+        line-height: 1.3;
+    }
+    /* Slightly enlarge the chevron icon in the expander header */
+    details[data-testid="stExpander"] > summary svg,
+    .streamlit-expanderHeader svg {
+        transform: scale(1.15);
+    }
+
+    
+    
 </style>
 """, unsafe_allow_html=True)
 
@@ -446,6 +462,7 @@ with tab1:
             st.image("Logos/CV Sync__.jpg", width=205)
 
             with st.expander("Date & Time: pg.1", expanded=False):
+
                 st.caption("Variables: Speed, Delay, and Travel Time")
 
                 # O-D mode (origin → destination)
