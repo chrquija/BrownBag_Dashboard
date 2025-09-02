@@ -418,7 +418,7 @@ def improved_volume_charts_for_tab2(
 # =========================
 # Tabs
 # =========================
-tab1, tab2 = st.tabs(["1️⃣ ITERIS CLEARGUIDE", "2️⃣ KINETIC MOBILITY"])
+tab1, tab2 = st.tabs(["Pg.1 ITERIS CLEARGUIDE", "Pg.2 KINETIC MOBILITY"])
 
 # -------------------------
 # TAB 1: Performance / Travel Time
@@ -445,7 +445,7 @@ with tab1:
             st.image("Logos/ACE-logo-HiRes.jpg", width=210)
             st.image("Logos/CV Sync__.jpg", width=205)
 
-            with st.expander("TAB 1️⃣ CONTROLS", expanded=False):
+            with st.expander("Date & Time: pg.1", expanded=False):
                 st.caption("Variables: Speed, Delay, and Travel Time")
 
                 # O-D mode (origin → destination)
@@ -916,7 +916,7 @@ with tab2:
         status_text.empty()
 
         with st.sidebar:
-            with st.expander("TAB 2️⃣ CONTROLS", expanded=False):
+            with st.expander("Date & Time: pg.2", expanded=False):
                 st.caption("Variables: Vehicle Volume")
                 intersections = ["All Intersections"] + sorted(
                     volume_df["intersection_name"].dropna().unique().tolist()
