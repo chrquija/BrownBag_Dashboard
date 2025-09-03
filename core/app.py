@@ -931,7 +931,7 @@ with tab2:
                     volume_df["intersection_name"].dropna().unique().tolist()
                 )
 
-                intersection = st.selectbox("####🚦 Select Intersection", intersections, key="intersection_vol")
+                intersection = st.selectbox("🚦 Select Intersection", intersections, key="intersection_vol")
 
                 min_date = volume_df["local_datetime"].dt.date.min()
                 max_date = volume_df["local_datetime"].dt.date.max()
