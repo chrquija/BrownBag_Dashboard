@@ -317,6 +317,10 @@ def build_intersections_overview(selected_label: Optional[str] = None) -> Option
 
     all_lats = [p[1] for p in points]
     all_lons = [p[2] for p in points]
+
+    # Dynamic title: show selected label when provided
+    title_text = "All Intersections" if not selected_label else f"Intersection: {selected_label}"
+
     fig.update_layout(
         mapbox=dict(
             style="open-street-map",
@@ -326,7 +330,7 @@ def build_intersections_overview(selected_label: Optional[str] = None) -> Option
         margin=dict(l=10, r=10, t=30, b=10),
         height=360,
         showlegend=False,
-        title="All Intersections",
+        title=title_text,
     )
     return fig
 
