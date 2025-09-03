@@ -1,7 +1,7 @@
 # python
 # Map.py
-# Ready-to-paste helper module for corridor/intersection maps using Plotly + OpenStreetMap.
-# No API keys required. Uses your provided GeoJSON segment URLs.
+# Plotly + OpenStreetMap helpers for the dashboard maps.
+# No API keys required. Uses provided GeoJSON segment URLs.
 
 from typing import Dict, List, Tuple, Optional
 
@@ -260,6 +260,73 @@ def build_intersection_map(intersection_label: str) -> Optional[go.Figure]:
         height=320,
         showlegend=False,
         title=f"Intersection: {intersection_label}",
+    )
+    return fig
+
+
+def build_intersections_overview(selected_label: Optional[str] = None) -> Optional[go.Figure]:
+    """
+    Tab 2: Show ALL intersections as dots. If 'selected_label' is provided, that dot is highlighted.
+    """
+    node_coords = _derive_node_coords_from_segments()
+    if not node_coords:
+        return None
+
+    all_labels = list(INTERSECTION_TO_NODE.keys())
+    if not all_labels:
+        return None
+
+    points = []
+    for label in all_labels:
+        node_key = INTERSECTION_TO_NODE.get(label, label)
+        latlon = node_coords.get(node_key)
+        if latlon:
+            points.append((label, latlon[0], latlon[1]))
+    if not points:
+        return None
+
+    sel_lat, sel_lon, sel_text = [], [], []
+    oth_lat, oth_lon, oth_text = [], [], []
+    for label, lat, lon in points:
+        if selected_label and label == selected_label:
+            sel_lat.append(lat); sel_lon.append(lon); sel_text.append(label)
+        else:
+            oth_lat.append(lat); oth_lon.append(lon); oth_text.append(label)
+
+    fig = go.Figure()
+
+    if oth_lat:
+        fig.add_trace(go.Scattermapbox(
+            lat=oth_lat, lon=oth_lon,
+            mode="markers+text",
+            marker=dict(size=10, color="#5DADE2"),
+            text=oth_text, textposition="top right",
+            hoverinfo="text",
+            name="Intersections",
+        ))
+
+    if sel_lat:
+        fig.add_trace(go.Scattermapbox(
+            lat=sel_lat, lon=sel_lon,
+            mode="markers+text",
+            marker=dict(size=14, color="#E74C3C"),
+            text=sel_text, textposition="top right",
+            hoverinfo="text",
+            name="Selected",
+        ))
+
+    all_lats = [p[1] for p in points]
+    all_lons = [p[2] for p in points]
+    fig.update_layout(
+        mapbox=dict(
+            style="open-street-map",
+            center=dict(lat=float(np.mean(all_lats)), lon=float(np.mean(all_lons))),
+            zoom=12,
+        ),
+        margin=dict(l=10, r=10, t=30, b=10),
+        height=360,
+        showlegend=False,
+        title="All Intersections",
     )
     return fig
 
