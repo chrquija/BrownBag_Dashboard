@@ -29,6 +29,10 @@ from sidebar_functions import (
 # Cycle length section (moved out)
 from cycle_length_recommendations import render_cycle_length_section
 
+#Map
+from Map import build_corridor_map, build_intersection_map
+
+
 # =========================
 # Page configuration
 # =========================
@@ -580,6 +584,19 @@ with tab1:
                         except Exception:
                             st.write("Direction counts in working_df: <unavailable>")
 
+                            # Right-side map column for Tab 1 (O–D corridor)
+                    if od_mode and origin and destination and origin != destination:
+                        try:
+                                    fig_od = build_corridor_map(origin, destination)
+                        except Exception:
+                            fig_od = None
+                        pad_col, map_col = st.columns([7, 3])  # 70% content • 30% map
+                        with map_col:
+                            if fig_od:
+                                st.plotly_chart(fig_od, use_container_width=True)
+                            else:
+                                st.caption("Map: select a valid O–D or check GeoJSON availability.")
+
                     # Filter + aggregate once for charts/tables at requested granularity
                     filtered_data = process_traffic_data(
                         working_df,
@@ -969,6 +986,18 @@ with tab2:
                     base_df = base_df[base_df["intersection_name"] == intersection]
                 if direction_filter != "All Directions":
                     base_df = base_df[base_df["direction"] == direction_filter]
+                    # Right-side map column for Tab 2 (selected intersection)
+                if intersection != "All Intersections":
+                    try:
+                        fig_int = build_intersection_map(intersection)
+                    except Exception:
+                            fig_int = None
+                    pad2, map_col2 = st.columns([7, 3])  # 70% content • 30% map
+                    with map_col2:
+                        if fig_int:
+                                st.plotly_chart(fig_int, use_container_width=True)
+                        else:
+                                st.caption("Map: update intersection mapping or check segment GeoJSON.")
 
                 if base_df.empty:
                     st.warning("⚠️ No volume data for the selected filters.")
