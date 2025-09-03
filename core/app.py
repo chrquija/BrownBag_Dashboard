@@ -452,7 +452,7 @@ with tab1:
 
                 st.caption("Select Origin, Destination, and Date Range")
                 st.caption("Data: Vehicle Speed, Delay, and Travel Time")
-                st.markdown("#### 🗺️ Select Origin to Destination")
+                st.markdown("### 🗺️ Select Origin to Destination")
 
                 # O-D mode (origin → destination)
                 od_mode = st.checkbox(
@@ -480,11 +480,11 @@ with tab1:
                 # Analysis Period
                 min_date = corridor_df["local_datetime"].dt.date.min()
                 max_date = corridor_df["local_datetime"].dt.date.max()
-                st.markdown("#### 📅 Date And Time")
+                st.markdown("### 📅 Date And Time")
                 date_range = date_range_preset_controls(min_date, max_date, key_prefix="perf")
 
                 # Analysis Settings
-                st.markdown("#### Granularity")
+                st.markdown("### Granularity")
                 granularity = st.selectbox(
                     "Data Aggregation",
                     ["Hourly", "Daily", "Weekly", "Monthly"],
@@ -936,10 +936,10 @@ with tab2:
                 min_date = volume_df["local_datetime"].dt.date.min()
                 max_date = volume_df["local_datetime"].dt.date.max()
 
-                st.markdown("#### 📅 Date And Time")
+                st.markdown("### 📅 Date And Time")
                 date_range_vol = date_range_preset_controls(min_date, max_date, key_prefix="vol")
 
-                st.markdown("#### Granularity")
+                st.markdown("### Granularity")
                 granularity_vol = st.selectbox(
                     "Data Aggregation",
                     ["Hourly", "Daily", "Weekly", "Monthly"],
