@@ -448,7 +448,7 @@ with tab1:
             st.image("Logos/ACE-logo-HiRes.jpg", width=210)
             st.image("Logos/CV Sync__.jpg", width=205)
 
-            with st.expander("⚙️ DATE & TIME: pg.1", expanded=False):
+            with st.expander("⚙️ Pg.1 SETTINGS", expanded=False):
 
                 st.caption("Select Date Range")
                 st.caption("Data: Speed, Delay, and Travel Time")
@@ -921,7 +921,7 @@ with tab2:
         status_text.empty()
 
         with st.sidebar:
-            with st.expander("⚙️ DATE & TIME: pg.2", expanded=False):
+            with st.expander("⚙️ Pg.2 SETTINGS", expanded=False):
 
                 st.caption("Select Date Range")
                 st.caption("Data: Vehicle Volume")
