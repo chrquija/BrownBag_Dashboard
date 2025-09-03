@@ -87,6 +87,7 @@ def _lines_from_geojson(gj: dict) -> List[List[Tuple[float, float]]]:
         coords = geom.get("coordinates", [])
         lines: List[List[Tuple[float, float]]] = []
         if gtype == "LineString":
+            # coordinates are [lon, lat]
             lines.append([(float(y[1]), float(y[0])) for y in coords if isinstance(y, (list, tuple)) and len(y) >= 2])
         elif gtype == "MultiLineString":
             for part in coords:
