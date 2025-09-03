@@ -450,6 +450,7 @@ with tab1:
 
             with st.expander("⚙️ DATE & TIME: pg.1", expanded=False):
 
+                st.caption("Select Date Range")
                 st.caption("Variables: Speed, Delay, and Travel Time")
 
                 # O-D mode (origin → destination)
@@ -921,6 +922,8 @@ with tab2:
 
         with st.sidebar:
             with st.expander("⚙️ DATE & TIME: pg.2", expanded=False):
+
+                st.caption("Select Date Range")
                 st.caption("Variables: Vehicle Volume")
                 intersections = ["All Intersections"] + sorted(
                     volume_df["intersection_name"].dropna().unique().tolist()
