@@ -1,5 +1,9 @@
-# python
 # app.py
+# ============================================
+# Active Transportation & Operations Management Dashboard
+# Sticky right-rail map fix + bigger map + responsive behavior
+# ============================================
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -30,7 +34,7 @@ from sidebar_functions import (
 # Cycle length section (moved out)
 from cycle_length_recommendations import render_cycle_length_section
 
-# Map
+# Map builders (return Plotly figures)
 from Map import build_corridor_map, build_intersection_map, build_intersections_overview
 
 
@@ -43,6 +47,13 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# Plotly UI tweaks + default map height
+PLOTLY_CONFIG = {
+    "displaylogo": False,
+    "modeBarButtonsToRemove": ["lasso2d", "select2d", "toggleSpikelines"]
+}
+MAP_HEIGHT = 700  # default map height (px) for the right rail
 
 # =========================
 # Constants / Config
@@ -143,10 +154,11 @@ def normalize_dir_value(v) -> str:
     return "unk"
 
 # =========================
-# Extra CSS
+# Extra CSS (includes a robust sticky-right-rail implementation)
 # =========================
 st.markdown("""
 <style>
+    /* Cards / layout polish */
     .main-container {
         background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
         border-radius: 15px; padding: 2rem; margin: 1rem 0; color: white;
@@ -158,11 +170,7 @@ st.markdown("""
         box-shadow: 0 8px 32px rgba(79, 172, 254, 0.3); backdrop-filter: blur(10px);
     }
     .context-header h2 { margin: 0; font-size: 2rem; font-weight: 700; }
-    .context-header p { margin: 1rem 0 0; font-size: 1.1rem; opacity: 0.9; font-weight: 300; }
-
-    .metric-container { background: rgba(79, 172, 254, 0.1); border: 1px solid rgba(79, 172, 254, 0.3);
-        border-radius: 15px; padding: 1.5rem; margin: 1rem 0; backdrop-filter: blur(10px); transition: all 0.3s ease; }
-    .metric-container:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(79, 172, 254, 0.2); }
+    .context-header p  { margin: 1rem 0 0; font-size: 1.1rem; opacity: 0.9; font-weight: 300; }
 
     .insight-box {
         background: linear-gradient(135deg, rgba(79, 172, 254, 0.15) 0%, rgba(0, 242, 254, 0.15) 100%);
@@ -175,30 +183,48 @@ st.markdown("""
         font-weight: 600; margin: 0.2rem; border: 2px solid transparent; transition: all 0.3s ease; }
     .performance-badge:hover { transform: scale(1.05); border-color: rgba(255,255,255,0.25); }
     .badge-excellent { background: linear-gradient(45deg, #2ecc71, #27ae60); color: white; }
-    .badge-good { background: linear-gradient(45deg, #3498db, #2980b9); color: white; }
-    .badge-fair { background: linear-gradient(45deg, #f39c12, #e67e22); color: white; }
-    .badge-poor { background: linear-gradient(45deg, #e74c3c, #8e44ad); color: white; }
-    .badge-critical { background: linear-gradient(45deg, #e74c3c, #8e44ad); color: white; animation: pulse 2s infinite; }
+    .badge-good      { background: linear-gradient(45deg, #3498db, #2980b9); color: white; }
+    .badge-fair      { background: linear-gradient(45deg, #f39c12, #e67e22); color: white; }
+    .badge-poor      { background: linear-gradient(45deg, #e74c3c, #8e44ad); color: white; }
+    .badge-critical  { background: linear-gradient(45deg, #e74c3c, #8e44ad); color: white; animation: pulse 2s infinite; }
     @keyframes pulse { 0% {opacity:1} 50% {opacity:.7} 100% {opacity:1} }
 
     .stTabs [data-baseweb="tab-list"] { gap: 16px; }
     .stTabs [data-baseweb="tab"] { height: 56px; padding: 0 18px; border-radius: 12px;
         background: rgba(79, 172, 254, 0.1); border: 1px solid rgba(79, 172, 254, 0.2); }
 
-    .chart-container { background: rgba(79, 172, 254, 0.05); border-radius: 15px; padding: 1rem; margin: 1rem 0;
-        border: 1px solid rgba(79, 172, 254, 0.1); }
-    .volume-metric { background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(41, 128, 185, 0.1));
-        border: 1px solid rgba(52, 152, 219, 0.3); border-radius: 12px; padding: 1rem; margin: 0.5rem 0; }
-    .modebar { filter: saturate(0.85) opacity(0.9); }
+    /* ==========================================================
+       Sticky Right Rail that actually works with Streamlit.
+       We drop a tiny invisible anchor (#od-map-anchor / #vol-map-anchor)
+       into the desired column, and then use :has() to make *that column*
+       sticky. This avoids trying to wrap Streamlit elements with HTML.
+       ========================================================== */
+    :root { --cvag-rail-top: 5.6rem; } /* top offset (enough to clear headers) */
 
-    /* Sticky right rail helpers */
-    .cvag-right-rail { position: sticky; top: 6rem; }
+    [data-testid="column"]:has(#od-map-anchor),
+    [data-testid="column"]:has(#vol-map-anchor) {
+        position: sticky;
+        top: var(--cvag-rail-top);
+        align-self: flex-start;       /* prevent stretching to tallest sibling */
+        z-index: 1;                   /* sit above charts while scrolling */
+    }
+
+    /* Nice card chrome around whatever is placed in the sticky column */
     .cvag-map-card {
         background: rgba(79,172,254,0.06);
         border: 1px solid rgba(79,172,254,0.18);
         border-radius: 12px;
         padding: 10px;
         box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+    }
+
+    /* On small screens, turn off sticky so layout is usable */
+    @media (max-width: 1100px) {
+        [data-testid="column"]:has(#od-map-anchor),
+        [data-testid="column"]:has(#vol-map-anchor) {
+            position: static;
+            top: auto;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -357,29 +383,22 @@ def improved_volume_charts_for_tab2(
 
     # Capacity overlays (scaled by hours per bucket)
     xs = _cap_series_for_x(plot_df, cap_vph, high_vph)
-
     fig_trend.add_trace(
         go.Scatter(
-            x=xs["local_datetime"],
-            y=xs["capacity"],
-            name=f"Theoretical Capacity ({unit})",
-            mode="lines",
+            x=xs["local_datetime"], y=xs["capacity"],
+            name=f"Theoretical Capacity ({unit})", mode="lines",
             line=dict(dash="dash"),
             hovertemplate=(f"%{{x|{xfmt}}}<br>Capacity: %{{y:,.0f}} {unit}<extra></extra>"),
         )
     )
-
     fig_trend.add_trace(
         go.Scatter(
-            x=xs["local_datetime"],
-            y=xs["high"],
-            name=f"High Volume Threshold ({unit})",
-            mode="lines",
+            x=xs["local_datetime"], y=xs["high"],
+            name=f"High Volume Threshold ({unit})", mode="lines",
             line=dict(dash="dot"),
             hovertemplate=(f"%{{x|{xfmt}}}<br>Threshold: %{{y:,.0f}} {unit}<extra></extra>"),
         )
     )
-
     fig_trend.update_layout(
         xaxis_title="Date/Time",
         yaxis_title=f"Volume ({unit})",
@@ -518,14 +537,14 @@ with tab1:
                         with c2:
                             end_hour = st.number_input("End Hour (1–24)", 1, 24, 18, step=1, key="end_hour_perf")
 
-        # Main tab content
+        # -------- Main content area (with sticky right rail) --------
         if len(date_range) == 2:
             try:
                 base_df = corridor_df.copy()
                 if base_df.empty:
                     st.warning("⚠️ No data for the selected segment.")
                 else:
-                    # --- BEGIN O-D SUBSET (handles NB and SB robustly) ---
+                    # --- Prepare working set / O-D path subset ---
                     working_df = base_df.copy()
                     route_label = "All Segments"
 
@@ -535,7 +554,6 @@ with tab1:
                             working_df[c] = pd.to_numeric(working_df[c], errors="coerce")
 
                     desired_dir: str | None = None
-                    path_segments: list[str] = []
 
                     if od_mode and origin and destination:
                         # Use canonical order (restricted to nodes present)
@@ -575,25 +593,38 @@ with tab1:
                             else:
                                 st.info("No matching segments found for the selected O-D on the canonical path.")
 
-                    # Sticky right-rail for Tab 1 map
-                    if od_mode and origin and destination and origin != destination:
-                        try:
-                            fig_od = build_corridor_map(origin, destination)
-                        except Exception:
-                            fig_od = None
+                    # ---------- Layout: wide content + sticky right rail ----------
+                    main_col_t1, right_col_t1 = st.columns([7, 3], gap="large")
 
-                        main_col_t1, right_col_t1 = st.columns([5, 2])
-                        with right_col_t1:
-                            st.markdown('<div class="cvag-right-rail cvag-map-card">', unsafe_allow_html=True)
-                            if fig_od:
-                                st.plotly_chart(fig_od, use_container_width=True)
-                            else:
-                                st.caption("Map: select a valid O–D or check GeoJSON availability.")
-                            st.markdown('</div>', unsafe_allow_html=True)
-                    else:
-                        main_col_t1 = st  # fall back to page root
+                    # Right rail (sticky map)
+                    with right_col_t1:
+                        # Invisible anchor that tags this column as "sticky" via CSS
+                        st.markdown('<div id="od-map-anchor"></div>', unsafe_allow_html=True)
 
-                    # Filter + aggregate once for charts/tables at requested granularity
+                        st.markdown("##### Corridor Map", help="Stays visible while you scroll the analysis on the left.")
+                        fig_od = None
+                        if od_mode and origin and destination and origin != destination:
+                            try:
+                                fig_od = build_corridor_map(origin, destination)
+                            except Exception:
+                                fig_od = None
+
+                        # If we have a corridor map for the selected O-D, show it; else show a helpful placeholder
+                        if fig_od:
+                            try:
+                                fig_od.update_layout(height=MAP_HEIGHT, margin=dict(l=0, r=0, t=32, b=0))
+                            except Exception:
+                                pass
+                            st.markdown(f'<div class="cvag-map-card">', unsafe_allow_html=True)
+                            st.plotly_chart(fig_od, use_container_width=True, config=PLOTLY_CONFIG)
+                            st.caption(f"Corridor Segment: **{origin} → {destination}**")
+                            st.markdown("</div>", unsafe_allow_html=True)
+                        else:
+                            st.markdown('<div class="cvag-map-card">', unsafe_allow_html=True)
+                            st.info("Select an **Origin** and **Destination** to display the corridor map.")
+                            st.markdown("</div>", unsafe_allow_html=True)
+
+                    # Left/main content
                     with main_col_t1:
                         filtered_data = process_traffic_data(
                             working_df,
@@ -768,11 +799,11 @@ with tab1:
                                 with v1:
                                     dc = performance_chart(trends_df, "delay")
                                     if dc:
-                                        st.plotly_chart(dc, use_container_width=True)
+                                        st.plotly_chart(dc, use_container_width=True, config=PLOTLY_CONFIG)
                                 with v2:
                                     tc = performance_chart(trends_df, "travel")
                                     if tc:
-                                        st.plotly_chart(tc, use_container_width=True)
+                                        st.plotly_chart(tc, use_container_width=True, config=PLOTLY_CONFIG)
 
                                 # Corridor O-D summary table (always hourly)
                                 if 'od_series' in locals() and not od_series.empty:
@@ -968,23 +999,37 @@ with tab2:
                 if direction_filter != "All Directions":
                     base_df = base_df[base_df["direction"] == direction_filter]
 
-                # Overview map for Tab 2 (sticky right rail)
-                try:
-                    fig_over = build_intersections_overview(
-                        selected_label=None if intersection == "All Intersections" else intersection
-                    )
-                except Exception:
-                    fig_over = None
+                # Two-column layout with sticky right rail
+                content_col, right_col = st.columns([7, 3], gap="large")
 
-                content_col, right_col = st.columns([5, 2])
+                # Right rail (sticky overview map)
                 with right_col:
-                    st.markdown('<div class="cvag-right-rail cvag-map-card">', unsafe_allow_html=True)
-                    if fig_over:
-                        st.plotly_chart(fig_over, use_container_width=True)
-                    else:
-                        st.caption("Map: unable to render overview (missing coordinates/GeoJSON).")
-                    st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown('<div id="vol-map-anchor"></div>', unsafe_allow_html=True)
+                    st.markdown("##### Network Map", help="Stays visible while you scroll the analysis on the left.")
 
+                    try:
+                        fig_over = build_intersections_overview(
+                            selected_label=None if intersection == "All Intersections" else intersection
+                        )
+                    except Exception:
+                        fig_over = None
+
+                    if fig_over:
+                        try:
+                            fig_over.update_layout(height=MAP_HEIGHT, margin=dict(l=0, r=0, t=32, b=0))
+                        except Exception:
+                            pass
+                        st.markdown('<div class="cvag-map-card">', unsafe_allow_html=True)
+                        st.plotly_chart(fig_over, use_container_width=True, config=PLOTLY_CONFIG)
+                        if intersection != "All Intersections":
+                            st.caption(f"Selected: **{intersection}**")
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown('<div class="cvag-map-card">', unsafe_allow_html=True)
+                        st.caption("Map: unable to render overview (missing coordinates/GeoJSON).")
+                        st.markdown('</div>', unsafe_allow_html=True)
+
+                # Main analysis content
                 with content_col:
                     if base_df.empty:
                         st.warning("⚠️ No volume data for the selected filters.")
@@ -1180,14 +1225,14 @@ with tab2:
                                         high_vph=HIGH_VOLUME_THRESHOLD_VPH,
                                     )
                                     if fig_trend:
-                                        st.plotly_chart(fig_trend, use_container_width=True)
+                                        st.plotly_chart(fig_trend, use_container_width=True, config=PLOTLY_CONFIG)
                                     colA, colB = st.columns(2)
                                     with colA:
                                         if fig_box:
-                                            st.plotly_chart(fig_box, use_container_width=True)
+                                            st.plotly_chart(fig_box, use_container_width=True, config=PLOTLY_CONFIG)
                                     with colB:
                                         if fig_matrix:
-                                            st.plotly_chart(fig_matrix, use_container_width=True)
+                                            st.plotly_chart(fig_matrix, use_container_width=True, config=PLOTLY_CONFIG)
                                 except Exception as e:
                                     st.error(f"❌ Error creating volume charts: {e}")
 
@@ -1487,5 +1532,4 @@ FOOTER = """
 })();
 </script>
 """
-
 st.markdown(FOOTER, unsafe_allow_html=True)
