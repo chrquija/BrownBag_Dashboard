@@ -421,6 +421,7 @@ def improved_volume_charts_for_tab2(
 # =========================
 # Tabs
 # =========================
+st.markdown("## Select Page")
 tab1, tab2 = st.tabs(["Pg.1 ITERIS CLEARGUIDE", "Pg.2 KINETIC MOBILITY"])
 
 # -------------------------
