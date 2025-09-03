@@ -267,6 +267,7 @@ def build_intersection_map(intersection_label: str) -> Optional[go.Figure]:
 def build_intersections_overview(selected_label: Optional[str] = None) -> Optional[go.Figure]:
     """
     Tab 2: Show ALL intersections as dots. If 'selected_label' is provided, that dot is highlighted.
+    Title reflects the selected intersection if any.
     """
     node_coords = _derive_node_coords_from_segments()
     if not node_coords:
