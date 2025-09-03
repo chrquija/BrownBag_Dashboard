@@ -450,8 +450,8 @@ with tab1:
 
             with st.expander("⚙️ Pg.1 SETTINGS", expanded=False):
 
-                st.caption("Select Date Range")
-                st.caption("Data: Speed, Delay, and Travel Time")
+                st.caption("Select Origin, Destination, and Date Range")
+                st.caption("Data: Vehicle Speed, Delay, and Travel Time")
 
                 # O-D mode (origin → destination)
                 od_mode = st.checkbox(
@@ -459,6 +459,7 @@ with tab1:
                     value=True,
                     help="Compute KPIs using summed per-hour O-D trip times along the selected path.",
                 )
+
                 origin, destination = None, None
                 if od_mode:
                     # Use canonical order but only keep nodes present in the data
@@ -478,7 +479,7 @@ with tab1:
                 # Analysis Period
                 min_date = corridor_df["local_datetime"].dt.date.min()
                 max_date = corridor_df["local_datetime"].dt.date.max()
-                st.markdown("#### 📅 Analysis Period")
+                st.markdown("#### 📅 Date And Time")
                 date_range = date_range_preset_controls(min_date, max_date, key_prefix="perf")
 
                 # Analysis Settings
@@ -923,7 +924,7 @@ with tab2:
         with st.sidebar:
             with st.expander("⚙️ Pg.2 SETTINGS", expanded=False):
 
-                st.caption("Select Date Range")
+                st.caption("Select Intersection(s) and Date Range")
                 st.caption("Data: Vehicle Volume")
                 intersections = ["All Intersections"] + sorted(
                     volume_df["intersection_name"].dropna().unique().tolist()
@@ -934,7 +935,7 @@ with tab2:
                 min_date = volume_df["local_datetime"].dt.date.min()
                 max_date = volume_df["local_datetime"].dt.date.max()
 
-                st.markdown("#### 📅 Analysis Period")
+                st.markdown("#### 📅 Date And Time")
                 date_range_vol = date_range_preset_controls(min_date, max_date, key_prefix="vol")
 
                 st.markdown("#### ⏰ Analysis Settings")
