@@ -1165,7 +1165,7 @@ with tab2:
                                 )
 
                         # ---------------- Charts (optimized for aggregation) ----------------
-                        st.subheader("📈 Volume Analysis Visualizations")
+                        st.subheader("📈 Vehicle Volume Visualizations")
                         if len(filtered_volume_data) > 1:
                             try:
                                 fig_trend, fig_box, fig_matrix = improved_volume_charts_for_tab2(
