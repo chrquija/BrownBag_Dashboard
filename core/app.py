@@ -448,7 +448,7 @@ with tab1:
             st.image("Logos/ACE-logo-HiRes.jpg", width=210)
             st.image("Logos/CV Sync__.jpg", width=205)
 
-            with st.expander("DATE & TIME: pg.1", expanded=False):
+            with st.expander("⚙️ DATE & TIME: pg.1", expanded=False):
 
                 st.caption("Variables: Speed, Delay, and Travel Time")
 
@@ -920,7 +920,7 @@ with tab2:
         status_text.empty()
 
         with st.sidebar:
-            with st.expander("DATE & TIME: pg.2", expanded=False):
+            with st.expander("⚙️ DATE & TIME: pg.2", expanded=False):
                 st.caption("Variables: Vehicle Volume")
                 intersections = ["All Intersections"] + sorted(
                     volume_df["intersection_name"].dropna().unique().tolist()
