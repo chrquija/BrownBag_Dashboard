@@ -470,11 +470,11 @@ with tab1:
 
                 st.caption("Select Origin, Destination, and Date Range")
                 st.caption("Data: Vehicle Speed, Delay, and Travel Time")
-                st.markdown("### 🗺️ Select Origin to Destination")
+                st.markdown("### 🗺️ Select Your Route")
 
                 # O-D mode (origin → destination)
                 od_mode = st.checkbox(
-                    "Origin - Destination Mode",
+                    "Route Pro Mode",
                     value=True,
                     help="Compute KPIs using summed per-hour O-D trip times along the selected path.",
                 )
