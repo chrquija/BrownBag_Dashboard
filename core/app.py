@@ -470,7 +470,7 @@ with tab1:
 
                 st.caption("Select Route and Date Range")
                 st.caption("Data: Vehicle Speed, Delay, and Travel Time")
-                st.markdown("### 🗺️ Select Your Route")
+                st.markdown("### 🗺️ Select Route")
 
                 # O-D mode (origin → destination)
                 od_mode = st.checkbox(
