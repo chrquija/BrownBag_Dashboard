@@ -548,15 +548,9 @@ with tab1:
             }
             st.session_state["t1_current"] = t1_current
 
-            cA, cB = st.columns([1, 1])
-            with cA:
-                if st.button("🔎 Search (Pg.1)"):
-                    st.session_state["t1_params"] = t1_current
-                    st.session_state["t1_ready"] = True
-            with cB:
-                if st.button("Clear (Pg.1)"):
-                    st.session_state["t1_params"] = {}
-                    st.session_state["t1_ready"] = False
+            if st.button("🔍 **Search**", key="search_tab1", type="primary", use_container_width=True):
+                st.session_state["t1_params"] = t1_current
+                st.session_state["t1_ready"] = True
 
     # -------- Main content area (render only when "Search" committed) --------
     t1_ready = st.session_state.get("t1_ready", False)
@@ -567,7 +561,7 @@ with tab1:
         st.info("🚧 No results yet. Choose settings in **Pg.1 SETTINGS** and click **Search (Pg.1)** to load data.")
     else:
         if t1_pending:
-            st.warning("⚙️ Press **Search (Pg.1)** to refresh.")
+            st.warning("⚙️ Press **Search** to refresh.")
 
         try:
             base_df = corridor_df.copy() if not corridor_df.empty else pd.DataFrame()
@@ -1010,15 +1004,11 @@ with tab2:
             }
             st.session_state["t2_current"] = t2_current
 
-            cA, cB = st.columns([1, 1])
-            with cA:
-                if st.button("🔎 Search (Pg.2)"):
-                    st.session_state["t2_params"] = t2_current
-                    st.session_state["t2_ready"] = True
-            with cB:
-                if st.button("Clear (Pg.2)"):
-                    st.session_state["t2_params"] = {}
-                    st.session_state["t2_ready"] = False
+
+            if st.button("🔍 **Search**", key="search_tab2", type="primary", use_container_width=True):
+                st.session_state["t2_params"] = t2_current
+                st.session_state["t2_ready"] = True
+
 
     # -------- Main content area (render only when "Search" committed) --------
     t2_ready = st.session_state.get("t2_ready", False)
