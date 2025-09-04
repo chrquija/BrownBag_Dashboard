@@ -1,10 +1,8 @@
-# python
+
 # Plotly + OpenStreetMap helpers for the dashboard maps.
-# No API keys required. Uses provided GeoJSON segment URLs.
 
 from typing import Dict, List, Tuple, Optional
 
-import time
 import numpy as np
 import requests
 import plotly.graph_objects as go
@@ -55,26 +53,14 @@ INTERSECTION_TO_NODE: Dict[str, str] = {
 
 @st.cache_data(show_spinner=False)
 def _fetch_geojson(url: str) -> Optional[dict]:
-    """
-    Fetch GeoJSON from a URL (cached) with a User-Agent and light retry to avoid 403/429.
-    """
-    headers = {"User-Agent": "ADVANTEC-Dashboard/1.0 (+streamlit)"}
-    for attempt in range(2):
-        try:
-            r = requests.get(url, timeout=15, headers=headers)
-            if r.status_code == 200:
-                return r.json()
-            if attempt == 0 and r.status_code in (429, 403, 502, 503, 504):
-                time.sleep(0.5)
-                continue
-            st.warning(f"GeoJSON HTTP {r.status_code}: {url}")
-            return None
-        except Exception as e:
-            if attempt == 0:
-                time.sleep(0.3)
-                continue
-            st.warning(f"Unable to load GeoJSON: {url} ({e})")
-            return None
+    """Fetch GeoJSON from a URL (cached)."""
+    try:
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        st.warning(f"Unable to load GeoJSON: {url} ({e})")
+        return None
 
 
 def _segment_pairs_between(origin: str, destination: str, nodes_order: List[str]) -> List[Tuple[str, str]]:
@@ -122,88 +108,25 @@ def _derive_node_coords_from_segments() -> Dict[str, Tuple[float, float]]:
     For each (A,B) segment, take the first and last point of its longest polyline and assign to A and B if missing.
     """
     node_coords: Dict[str, Tuple[float, float]] = {}
-    failures = 0
     for (a, b), url in SEGMENT_URLS.items():
         gj = _fetch_geojson(url)
         if not gj:
-            failures += 1
             continue
         lines = _lines_from_geojson(gj)
         if not lines:
-            failures += 1
             continue
         line = max(lines, key=lambda l: len(l))
         start_lat, start_lon = line[0]
         end_lat, end_lon = line[-1]
         node_coords.setdefault(a, (start_lat, start_lon))
         node_coords.setdefault(b, (end_lat, end_lon))
-
-    if not node_coords:
-        st.warning("No coordinates could be derived from GeoJSON. "
-                   f"Tried {len(SEGMENT_URLS)} files, failures: {failures}. "
-                   "Check network access and the GeoJSON URLs.")
     return node_coords
 
 
-def _add_corridor_ghost_layer(fig: go.Figure, alpha: float = 0.35, width: int = 3) -> None:
-    """Draw all corridor segments lightly in the background for spatial context."""
-    for pair, url in SEGMENT_URLS.items():
-        gj = _fetch_geojson(url)
-        if not gj:
-            continue
-        lines = _lines_from_geojson(gj)
-        for line in lines:
-            lats = [p[0] for p in line]
-            lons = [p[1] for p in line]
-            fig.add_trace(
-                go.Scattermapbox(
-                    lat=lats,
-                    lon=lons,
-                    mode="lines",
-                    line=dict(width=width, color=f"rgba(93,173,226,{alpha})"),
-                    hoverinfo="skip",
-                    showlegend=False,
-                    name=f"{pair[0]} → {pair[1]} (context)",
-                )
-            )
-
-
-def _add_direction_arrows(fig: go.Figure, polyline: List[Tuple[float, float]], every: int = 30) -> None:
-    """Place small directional markers along a polyline every N points."""
-    if not polyline or len(polyline) < 2:
-        return
-    step = max(1, len(polyline) // max(1, every))
-    samp = polyline[::step]
-    if len(samp) < 2:
-        return
-    fig.add_trace(
-        go.Scattermapbox(
-            lat=[p[0] for p in samp],
-            lon=[p[1] for p in samp],
-            mode="markers",
-            marker=dict(size=9, color="#34495E", symbol="triangle-right"),
-            hoverinfo="skip",
-            showlegend=False,
-            name="dir",
-        )
-    )
-
-
-def build_corridor_map(
-    origin: str,
-    destination: str,
-    *,
-    height: int = 420,
-    map_style: str = "carto-positron",
-    show_ghost: bool = True,
-    keep_view: bool = True,          # preserve zoom/center across reruns
-    fit_route: bool = True,          # auto-fit viewport to route
-    pitch: int = 0,                  # 0 (flat) → 60 (tilted)
-    bearing: int = 0,                # 0..360 (rotate map) for nav feel
-    add_arrows: bool = True,         # add direction markers along path
-) -> Optional[go.Figure]:
+def build_corridor_map(origin: str, destination: str) -> Optional[go.Figure]:
     """
-    Tab 1: Show selected O→D corridor segment(s) with improved defaults and options.
+    Tab 1: Show the selected O→D corridor segment(s).
+    Draws the path using your GeoJSON segments and highlights start/end.
     """
     if not origin or not destination or origin == destination:
         return None
@@ -215,15 +138,10 @@ def build_corridor_map(
     fig = go.Figure()
     all_lats: List[float] = []
     all_lons: List[float] = []
-    route_points: List[Tuple[float, float]] = []
 
-    # Optional context layer
-    if show_ghost:
-        _add_corridor_ghost_layer(fig, alpha=0.30, width=2)
-
-    # Draw each selected segment polyline (main route)
+    # Draw each segment polyline
     for pair in pairs:
-        url = SEGMENT_URLS.get(pair) or SEGMENT_URLS.get((pair[1], pair[0]))
+        url = SEGMENT_URLS.get(pair) or SEGMENT_URLS.get((pair[1], pair[0]))  # fallback to reversed if needed
         if not url:
             st.info(f"No GeoJSON registered for segment {pair[0]} → {pair[1]}")
             continue
@@ -238,13 +156,12 @@ def build_corridor_map(
             lons = [p[1] for p in line]
             all_lats.extend(lats)
             all_lons.extend(lons)
-            route_points.extend(line)
             fig.add_trace(
                 go.Scattermapbox(
                     lat=lats,
                     lon=lons,
                     mode="lines",
-                    line=dict(width=7, color="#1f77b4"),
+                    line=dict(width=5, color="#1f77b4"),
                     hoverinfo="skip",
                     name=f"{pair[0]} → {pair[1]}",
                 )
@@ -253,7 +170,7 @@ def build_corridor_map(
     if not all_lats or not all_lons:
         return None
 
-    # Start/end markers
+    # Start/end markers from derived node coordinates
     node_coords = _derive_node_coords_from_segments()
     start_latlon = node_coords.get(origin)
     end_latlon = node_coords.get(destination)
@@ -264,7 +181,7 @@ def build_corridor_map(
                 lat=[start_latlon[0]],
                 lon=[start_latlon[1]],
                 mode="markers+text",
-                marker=dict(size=14, color="#2ECC71"),
+                marker=dict(size=12, color="#2ECC71"),
                 text=[f"Start: {origin}"],
                 textposition="top right",
                 showlegend=False,
@@ -278,7 +195,7 @@ def build_corridor_map(
                 lat=[end_latlon[0]],
                 lon=[end_latlon[1]],
                 mode="markers+text",
-                marker=dict(size=14, color="#E74C3C"),
+                marker=dict(size=12, color="#E74C3C"),
                 text=[f"End: {destination}"],
                 textposition="top right",
                 showlegend=False,
@@ -287,43 +204,24 @@ def build_corridor_map(
             )
         )
 
-    # Optional direction arrows
-    if add_arrows and route_points:
-        _add_direction_arrows(fig, route_points, every=40)
-
-    # Map layout; uirevision preserves user zoom
-    mapbox_cfg = dict(
-        style=map_style,
-        center=dict(lat=float(np.mean(all_lats)), lon=float(np.mean(all_lons))),
-        zoom=12,
-        pitch=pitch,
-        bearing=bearing,
-    )
-    if fit_route:
-        mapbox_cfg["fitbounds"] = "locations"
-
     fig.update_layout(
-        mapbox=mapbox_cfg,
-        margin=dict(l=8, r=8, t=36, b=8),
-        height=height,
+        mapbox=dict(
+            style="open-street-map",
+            center=dict(lat=float(np.mean(all_lats)), lon=float(np.mean(all_lons))),
+            zoom=12,
+        ),
+        margin=dict(l=10, r=10, t=30, b=10),
+        height=360,
         showlegend=False,
         title=f"Corridor Segment: {origin} → {destination}",
-        uirevision="corridor_map" if keep_view else None,
     )
     return fig
 
 
-def build_intersection_map(
-    intersection_label: str,
-    *,
-    height: int = 360,
-    map_style: str = "carto-positron",
-    keep_view: bool = True,
-    pitch: int = 0,
-    bearing: int = 0,
-) -> Optional[go.Figure]:
+def build_intersection_map(intersection_label: str) -> Optional[go.Figure]:
     """
-    Tab 2: Show a dot for the selected intersection with improved defaults.
+    Tab 2: Show a dot for the selected intersection.
+    Resolves display label -> corridor node, derives lat/lon from segments, and marks it.
     """
     if not intersection_label:
         return None
@@ -352,29 +250,19 @@ def build_intersection_map(
     )
     fig.update_layout(
         mapbox=dict(
-            style=map_style,
+            style="open-street-map",
             center=dict(lat=lat, lon=lon),
             zoom=14,
-            pitch=pitch,
-            bearing=bearing,
         ),
-        margin=dict(l=8, r=8, t=32, b=8),
-        height=height,
+        margin=dict(l=10, r=10, t=30, b=10),
+        height=320,
         showlegend=False,
         title=f"Intersection: {intersection_label}",
-        uirevision="intersection_map" if keep_view else None,
     )
     return fig
 
 
-def build_intersections_overview(
-    selected_label: Optional[str] = None,
-    *,
-    height: int = 380,
-    map_style: str = "carto-positron",
-    keep_view: bool = True,
-    cluster: bool = True,  # enable clustering for readability at low zoom
-) -> Optional[go.Figure]:
+def build_intersections_overview(selected_label: Optional[str] = None) -> Optional[go.Figure]:
     """
     Tab 2: Show ALL intersections as dots. If 'selected_label' is provided, that dot is highlighted.
     Title reflects the selected intersection if any.
@@ -407,22 +295,14 @@ def build_intersections_overview(
     fig = go.Figure()
 
     if oth_lat:
-        trace = go.Scattermapbox(
+        fig.add_trace(go.Scattermapbox(
             lat=oth_lat, lon=oth_lon,
             mode="markers+text",
             marker=dict(size=10, color="#5DADE2"),
             text=oth_text, textposition="top right",
             hoverinfo="text",
             name="Intersections",
-            showlegend=False,
-        )
-        if cluster:
-            # Plotly supports clustering on Scattermapbox in recent versions; ignore if unsupported
-            try:
-                trace.cluster = dict(enabled=True)
-            except Exception:
-                pass
-        fig.add_trace(trace)
+        ))
 
     if sel_lat:
         fig.add_trace(go.Scattermapbox(
@@ -432,26 +312,24 @@ def build_intersections_overview(
             text=sel_text, textposition="top right",
             hoverinfo="text",
             name="Selected",
-            showlegend=False,
         ))
 
     all_lats = [p[1] for p in points]
     all_lons = [p[2] for p in points]
 
+    # Dynamic title: show selected label when provided
     title_text = "All Intersections" if not selected_label else f"Intersection: {selected_label}"
 
     fig.update_layout(
         mapbox=dict(
-            style=map_style,
+            style="open-street-map",
             center=dict(lat=float(np.mean(all_lats)), lon=float(np.mean(all_lons))),
             zoom=12,
-            fitbounds="locations",
         ),
-        margin=dict(l=8, r=8, t=32, b=8),
-        height=height,
+        margin=dict(l=10, r=10, t=30, b=10),
+        height=360,
         showlegend=False,
         title=title_text,
-        uirevision="overview_map" if keep_view else None,
     )
     return fig
 
@@ -491,7 +369,7 @@ def build_all_segments_overview() -> Optional[go.Figure]:
 
     fig.update_layout(
         mapbox=dict(
-            style="carto-positron",
+            style="open-street-map",
             center=dict(lat=float(np.mean(all_lats)), lon=float(np.mean(all_lons))),
             zoom=12,
         ),

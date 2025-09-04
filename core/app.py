@@ -575,19 +575,40 @@ with tab1:
                             else:
                                 st.info("No matching segments found for the selected O-D on the canonical path.")
 
+                                # Right-side map column for Tab 1 (O–D corridor)
+                                if od_mode and origin and destination and origin != destination:
+                                    try:
+                                        fig_od = build_corridor_map(origin, destination)
+                                    except Exception:
+                                        fig_od = None
 
-                            # Right-side map column for Tab 1 (O–D corridor)
-                    if od_mode and origin and destination and origin != destination:
-                        try:
-                                    fig_od = build_corridor_map(origin, destination)
-                        except Exception:
-                            fig_od = None
-                        pad_col, map_col = st.columns([7, 3])  # 70% content • 30% map
-                        with map_col:
-                            if fig_od:
-                                st.plotly_chart(fig_od, use_container_width=True)
-                            else:
-                                st.caption("Map: select a valid O–D or check GeoJSON availability.")
+                                    # Sticky right-rail CSS (safe to include here too)
+                                    st.markdown(
+                                        """
+                                        <style>
+                                          .cvag-right-rail { position: sticky; top: 6rem; }
+                                          .cvag-map-card {
+                                            background: rgba(79,172,254,0.06);
+                                            border: 1px solid rgba(79,172,254,0.18);
+                                            border-radius: 12px;
+                                            padding: 10px;
+                                            box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+                                          }
+                                        </style>
+                                        """,
+                                        unsafe_allow_html=True
+                                    )
+
+                                    # Sticky right rail for Tab 1
+                                    main_col_t1, right_col_t1 = st.columns([5, 2])  # wider content • slimmer map rail
+                                    with right_col_t1:
+                                        st.markdown('<div class="cvag-right-rail cvag-map-card">',
+                                                    unsafe_allow_html=True)
+                                        if fig_od:
+                                            st.plotly_chart(fig_od, use_container_width=True)
+                                        else:
+                                            st.caption("Map: select a valid O–D or check GeoJSON availability.")
+                                        st.markdown('</div>', unsafe_allow_html=True)
 
                     # Filter + aggregate once for charts/tables at requested granularity
                     filtered_data = process_traffic_data(
