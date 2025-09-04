@@ -476,7 +476,7 @@ with tab1:
                 od_mode = st.checkbox(
                     "Route Pro Mode",
                     value=True,
-                    help="Compute KPIs using summed per-hour O-D trip times along the selected path.",
+                    help="Choose Your Starting Point and Ending Point to Compute Analysis",
                 )
 
                 origin, destination = None, None
