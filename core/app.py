@@ -1,10 +1,9 @@
-# python
 # app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-import time
+import time  # (unused now; okay to remove if you want)
 import streamlit.components.v1 as components
 
 # Plotly
@@ -143,7 +142,7 @@ def normalize_dir_value(v) -> str:
     return "unk"
 
 # =========================
-# Extra CSS
+# Extra CSS  (incl. progress-bar kill switch + map card)
 # =========================
 st.markdown("""
 <style>
@@ -173,7 +172,6 @@ st.markdown("""
 
     .performance-badge { display: inline-block; padding: 0.35rem 0.9rem; border-radius: 25px; font-size: 0.85rem;
         font-weight: 600; margin: 0.2rem; border: 2px solid transparent; transition: all 0.3s ease; }
-    .performance-badge:hover { transform: scale(1.05); border-color: rgba(255,255,255,0.25); }
     .badge-excellent { background: linear-gradient(45deg, #2ecc71, #27ae60); color: white; }
     .badge-good { background: linear-gradient(45deg, #3498db, #2980b9); color: white; }
     .badge-fair { background: linear-gradient(45deg, #f39c12, #e67e22); color: white; }
@@ -199,6 +197,12 @@ st.markdown("""
         border-radius: 12px;
         padding: 10px;
         box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+    }
+
+    /* ---- Kill any Streamlit progress bars or shells (belt & suspenders) ---- */
+    [data-testid="stProgress"], div[role="progressbar"]{
+        display: none !important; visibility: hidden !important;
+        height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -431,22 +435,12 @@ tab1, tab2 = st.tabs(["Pg.1 ITERIS CLEARGUIDE", "Pg.2 KINETIC MOBILITY"])
 # TAB 1: Performance / Travel Time
 # -------------------------
 with tab1:
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    status_text.text("Loading corridor performance data...")
-    progress_bar.progress(25)
-
+    # NOTE: removed progress widgets to avoid stray bars
     corridor_df = get_corridor_df()
-    progress_bar.progress(100)
 
     if corridor_df.empty:
         st.error("❌ Failed to load corridor data. Please check your data sources.")
     else:
-        status_text.text("✅ Data loaded successfully!")
-        time.sleep(0.5)
-        progress_bar.empty()
-        status_text.empty()
-
         # Sidebar logos + Controls
         with st.sidebar:
             st.image("Logos/ACE-logo-HiRes.jpg", width=210)
@@ -586,6 +580,11 @@ with tab1:
                         with right_col_t1:
                             st.markdown('<div class="cvag-right-rail cvag-map-card">', unsafe_allow_html=True)
                             if fig_od:
+                                # --- IMPORTANT: remove Plotly title band (the blue bar you saw) ---
+                                try:
+                                    fig_od.update_layout(title=None, margin=dict(t=0))
+                                except Exception:
+                                    pass
                                 st.plotly_chart(fig_od, use_container_width=True, config={"displayModeBar": False})
                             else:
                                 st.caption("Map: select a valid O–D or check GeoJSON availability.")
@@ -909,22 +908,12 @@ with tab1:
 # TAB 2: Volume / Capacity
 # -------------------------
 with tab2:
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    status_text.text("Loading traffic demand data...")
-    progress_bar.progress(25)
-
+    # NOTE: removed progress widgets to avoid stray bars
     volume_df = get_volume_df()
-    progress_bar.progress(100)
 
     if volume_df.empty:
         st.error("❌ Failed to load volume data. Please check your data sources.")
     else:
-        status_text.text("✅ Volume data loaded successfully!")
-        time.sleep(0.5)
-        progress_bar.empty()
-        status_text.empty()
-
         with st.sidebar:
             with st.expander("⚙️ Pg.2 SETTINGS", expanded=False):
 
@@ -980,6 +969,11 @@ with tab2:
                 with right_col:
                     st.markdown('<div class="cvag-right-rail cvag-map-card">', unsafe_allow_html=True)
                     if fig_over:
+                        # --- IMPORTANT: remove Plotly title band (blue bar) ---
+                        try:
+                            fig_over.update_layout(title=None, margin=dict(t=0))
+                        except Exception:
+                            pass
                         st.plotly_chart(fig_over, use_container_width=True, config={"displayModeBar": False})
                     else:
                         st.caption("Map: unable to render overview (missing coordinates/GeoJSON).")
@@ -1487,5 +1481,4 @@ FOOTER = """
 })();
 </script>
 """
-
 st.markdown(FOOTER, unsafe_allow_html=True)
