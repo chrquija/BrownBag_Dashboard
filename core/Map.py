@@ -1,7 +1,5 @@
-# python
-# Map.py
+
 # Plotly + OpenStreetMap helpers for the dashboard maps.
-# No API keys required. Uses provided GeoJSON segment URLs.
 
 from typing import Dict, List, Tuple, Optional
 

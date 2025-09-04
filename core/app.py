@@ -1059,7 +1059,7 @@ with tab2:
                               </div>
                               <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
                                 <div>📅 {date_range_vol[0].strftime('%b %d, %Y')} to {date_range_vol[1].strftime('%b %d, %Y')} ({span} days) • {granularity_vol} Aggregation</div>
-                                <div>✅ {total_obs:,} observations • Direction: {direction_filter}</div>
+                                <div>Direction: {direction_filter}</div>
                               </div>
                             </div>
                             """,
