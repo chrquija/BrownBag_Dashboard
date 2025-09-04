@@ -576,13 +576,6 @@ with tab1:
                             else:
                                 st.info("No matching segments found for the selected O-D on the canonical path.")
 
-                    # === DEBUG 1: Show direction counts in working_df (after path & direction filter) ===
-                    if "direction" in working_df.columns:
-                        try:
-                            dir_counts_working = normalize_dir(working_df["direction"]).value_counts(dropna=False).to_dict()
-                            st.write("Direction counts in working_df:", dir_counts_working)
-                        except Exception:
-                            st.write("Direction counts in working_df: <unavailable>")
 
                             # Right-side map column for Tab 1 (O–D corridor)
                     if od_mode and origin and destination and origin != destination:
