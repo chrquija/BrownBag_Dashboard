@@ -468,7 +468,7 @@ with tab1:
 
             with st.expander("⚙️ Pg.1 SETTINGS", expanded=False):
 
-                st.caption("Select Origin, Destination, and Date Range")
+                st.caption("Select Route and Date Range")
                 st.caption("Data: Vehicle Speed, Delay, and Travel Time")
                 st.markdown("### 🗺️ Select Your Route")
 
