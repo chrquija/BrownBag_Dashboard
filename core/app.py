@@ -594,7 +594,7 @@ with tab1:
                                 st.info("No matching segments found for the selected O-D on the canonical path.")
 
                     # ---------- Layout: wide content + sticky right rail ----------
-                    main_col_t1, right_col_t1 = st.columns([7, 4], gap="large")
+                    main_col_t1, right_col_t1 = st.columns([7, 3.5], gap="large")
 
                     # Right rail (sticky map)
                     with right_col_t1:
@@ -1000,7 +1000,7 @@ with tab2:
                     base_df = base_df[base_df["direction"] == direction_filter]
 
                 # Two-column layout with sticky right rail
-                content_col, right_col = st.columns([7, 4], gap="large")
+                content_col, right_col = st.columns([7, 3.5], gap="large")
 
                 # Right rail (sticky overview map)
                 with right_col:
