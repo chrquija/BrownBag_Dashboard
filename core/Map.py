@@ -213,7 +213,7 @@ def build_corridor_map(origin: str, destination: str) -> Optional[go.Figure]:
         margin=dict(l=10, r=10, t=30, b=10),
         height=360,
         showlegend=False,
-        title=f"Corridor Segment: {origin} → {destination}",
+        title="Corridor: Washington Street",
     )
     return fig
 
@@ -317,8 +317,8 @@ def build_intersections_overview(selected_label: Optional[str] = None) -> Option
     all_lats = [p[1] for p in points]
     all_lons = [p[2] for p in points]
 
-    # Dynamic title: show selected label when provided
-    title_text = "All Intersections" if not selected_label else f"Intersection: {selected_label}"
+    # Static corridor title
+    title_text = "Corridor: Washington Street"
 
     fig.update_layout(
         mapbox=dict(
