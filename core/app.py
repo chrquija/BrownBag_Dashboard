@@ -1,5 +1,3 @@
-# python
-# app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -586,7 +584,7 @@ with tab1:
                         with right_col_t1:
                             st.markdown('<div class="cvag-right-rail cvag-map-card">', unsafe_allow_html=True)
                             if fig_od:
-                                st.plotly_chart(fig_od, use_container_width=True, config={"displayModeBar": False})
+                                st.plotly_chart(fig_od, use_container_width=True)
                             else:
                                 st.caption("Map: select a valid O–D or check GeoJSON availability.")
                             st.markdown('</div>', unsafe_allow_html=True)
@@ -980,7 +978,7 @@ with tab2:
                 with right_col:
                     st.markdown('<div class="cvag-right-rail cvag-map-card">', unsafe_allow_html=True)
                     if fig_over:
-                        st.plotly_chart(fig_over, use_container_width=True, config={"displayModeBar": False})
+                        st.plotly_chart(fig_over, use_container_width=True)
                     else:
                         st.caption("Map: unable to render overview (missing coordinates/GeoJSON).")
                     st.markdown('</div>', unsafe_allow_html=True)
