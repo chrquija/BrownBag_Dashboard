@@ -558,7 +558,7 @@ with tab1:
     t1_pending = t1_ready and _freeze_params(t1_params) != _freeze_params(st.session_state.get("t1_current", {}))
 
     if not t1_ready:
-        st.info("🚧 No results yet. Choose settings in **Pg.1 SETTINGS** and click **Search (Pg.1)** to load data.")
+        st.info("Choose your Route and Date Range in the settings to the left.")
     else:
         if t1_pending:
             st.warning("⚙️ Press **Search** to refresh.")
@@ -1016,7 +1016,7 @@ with tab2:
     t2_pending = t2_ready and _freeze_params(t2_params) != _freeze_params(st.session_state.get("t2_current", {}))
 
     if not t2_ready:
-        st.info("🚧 No results yet. Choose settings in **Pg.2 SETTINGS** and click **Search (Pg.2)** to load data.")
+        st.info("Choose your route and date range in the settings to the left.")
     else:
         if t2_pending:
             st.warning("⚙️ Press **Search** to refresh.")
