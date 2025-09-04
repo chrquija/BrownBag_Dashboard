@@ -1005,7 +1005,7 @@ with tab2:
                 # Right rail (sticky overview map)
                 with right_col:
                     st.markdown('<div id="vol-map-anchor"></div>', unsafe_allow_html=True)
-                    st.markdown("##### Network Map", help="Stays visible while you scroll the analysis on the left.")
+                    st.markdown("##### Corridor Map", help="Stays visible while you scroll the analysis on the left.")
 
                     try:
                         fig_over = build_intersections_overview(
