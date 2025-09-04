@@ -473,9 +473,9 @@ with tab1:
             st.markdown("## 🗺️ Select Route")
 
             od_mode = st.checkbox(
-                "Origin - Destination Mode",
+                "Analysis Pro",
                 value=True,
-                help="Compute KPIs using summed per-hour O-D trip times along the selected path.",
+                help="Allows you the power to select Origin and Destination. ",
                 key="od_mode_perf",
             )
 
@@ -505,7 +505,7 @@ with tab1:
             date_range = date_range_preset_controls(min_date, max_date, key_prefix="perf")
 
             # Analysis Settings
-            st.markdown("### Granularity")
+            st.markdown("## Granularity")
             granularity = st.selectbox(
                 "Data Aggregation",
                 ["Hourly", "Daily", "Weekly", "Monthly"],
@@ -981,7 +981,7 @@ with tab2:
             st.markdown("## 📅 Date And Time")
             date_range_vol = date_range_preset_controls(min_date, max_date, key_prefix="vol")
 
-            st.markdown("### Granularity")
+            st.markdown("## Granularity")
             granularity_vol = st.selectbox(
                 "Data Aggregation",
                 ["Hourly", "Daily", "Weekly", "Monthly"],
