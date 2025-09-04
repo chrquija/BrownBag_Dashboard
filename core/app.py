@@ -567,7 +567,7 @@ with tab1:
         st.info("🚧 No results yet. Choose settings in **Pg.1 SETTINGS** and click **Search (Pg.1)** to load data.")
     else:
         if t1_pending:
-            st.warning("⚙️ Settings changed. Results are from your last **Search**. Press **Search (Pg.1)** to refresh.")
+            st.warning("⚙️ Press **Search (Pg.1)** to refresh.")
 
         try:
             base_df = corridor_df.copy() if not corridor_df.empty else pd.DataFrame()
@@ -1029,7 +1029,7 @@ with tab2:
         st.info("🚧 No results yet. Choose settings in **Pg.2 SETTINGS** and click **Search (Pg.2)** to load data.")
     else:
         if t2_pending:
-            st.warning("⚙️ Settings changed. Results are from your last **Search**. Press **Search (Pg.2)** to refresh.")
+            st.warning("⚙️ Press **Search (Pg.2)** to refresh.")
 
         try:
             base_df = volume_df.copy() if not volume_df.empty else pd.DataFrame()
