@@ -468,14 +468,14 @@ with tab1:
         st.image("Logos/CV Sync__.jpg", width=205)
 
         with st.expander("⚙️ Pg.1 SETTINGS", expanded=True):
-            st.caption("Select Corridor Segment and Date Range")
+            st.caption("Select Origin, Destination, and Date Range")
             st.caption("Data: Vehicle Speed, Delay, and Travel Time")
-            st.markdown("### 🗺️ Select Route")
+            st.markdown("### 🗺️ Select Origin to Destination")
 
             od_mode = st.checkbox(
-                "Pro Route Mode",
+                "Origin - Destination Mode",
                 value=True,
-                help="Pro Route Mode gives you the power to select your start and end points.",
+                help="Compute KPIs using summed per-hour O-D trip times along the selected path.",
                 key="od_mode_perf",
             )
 
@@ -550,11 +550,11 @@ with tab1:
 
             cA, cB = st.columns([1, 1])
             with cA:
-                if st.button("Search"):
+                if st.button("🔎 Search (Pg.1)"):
                     st.session_state["t1_params"] = t1_current
                     st.session_state["t1_ready"] = True
             with cB:
-                if st.button("Clear"):
+                if st.button("Clear (Pg.1)"):
                     st.session_state["t1_params"] = {}
                     st.session_state["t1_ready"] = False
 
@@ -564,7 +564,7 @@ with tab1:
     t1_pending = t1_ready and _freeze_params(t1_params) != _freeze_params(st.session_state.get("t1_current", {}))
 
     if not t1_ready:
-        st.info("Pick your route and dates in the settings to the left.")
+        st.info("🚧 No results yet. Choose settings in **Pg.1 SETTINGS** and click **Search (Pg.1)** to load data.")
     else:
         if t1_pending:
             st.warning("⚙️ Settings changed. Results are from your last **Search**. Press **Search (Pg.1)** to refresh.")
@@ -1012,11 +1012,11 @@ with tab2:
 
             cA, cB = st.columns([1, 1])
             with cA:
-                if st.button("Search"):
+                if st.button("🔎 Search (Pg.2)"):
                     st.session_state["t2_params"] = t2_current
                     st.session_state["t2_ready"] = True
             with cB:
-                if st.button("Clear"):
+                if st.button("Clear (Pg.2)"):
                     st.session_state["t2_params"] = {}
                     st.session_state["t2_ready"] = False
 
