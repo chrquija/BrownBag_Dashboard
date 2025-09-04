@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -140,7 +141,7 @@ def normalize_dir_value(v) -> str:
         s = str(v).lower().strip()
     except Exception:
         return "unk"
-    s = " ".join([tok for tok in s.replace("-", " ").replace("_", " ").split() ])
+    s = " ".join([tok for tok in s.replace("-", " ").replace("_", " ").split()])
     if any(t in s for t in [" nb", "nb ", " northbound", " north "]):
         return "nb"
     if any(t in s for t in [" sb", "sb ", " southbound", " south "]):
@@ -180,7 +181,7 @@ st.markdown("""
     .badge-good      { background: linear-gradient(45deg, #3498db, #2980b9); color: white; }
     .badge-fair      { background: linear-gradient(45deg, #f39c12, #e67e22); color: white; }
     .badge-poor      { background: linear-gradient(45deg, #e74c3c, #8e44ad); color: white; }
-    .badge-critical  { background: linear-gradient(45deg, #e74c3c, #8e44ad); animation: pulse 2s infinite; }
+    .badge-critical  { background: linear-gradient(45deg, #e74c3c, #8e44ad); color: white; animation: pulse 2s infinite; }
     @keyframes pulse { 0% {opacity:1} 50% {opacity:.7} 100% {opacity:1} }
 
     .stTabs [data-baseweb="tab-list"] { gap: 16px; }
@@ -189,6 +190,9 @@ st.markdown("""
 
     /* ==========================================================
        Sticky Right Rail that actually works with Streamlit.
+       We drop a tiny invisible anchor (#od-map-anchor / #vol-map-anchor)
+       into the desired column, and then use :has() to make *that column*
+       sticky. This avoids trying to wrap Streamlit elements with HTML.
        ========================================================== */
     :root { --cvag-rail-top: 5.6rem; } /* top offset (enough to clear headers) */
 
@@ -196,10 +200,11 @@ st.markdown("""
     [data-testid="column"]:has(#vol-map-anchor) {
         position: sticky;
         top: var(--cvag-rail-top);
-        align-self: flex-start;
-        z-index: 1;
+        align-self: flex-start;       /* prevent stretching to tallest sibling */
+        z-index: 1;                   /* sit above charts while scrolling */
     }
 
+    /* Nice card chrome around whatever is placed in the sticky column */
     .cvag-map-card {
         background: rgba(79,172,254,0.06);
         border: 1px solid rgba(79,172,254,0.18);
@@ -208,6 +213,7 @@ st.markdown("""
         box-shadow: 0 6px 18px rgba(0,0,0,0.06);
     }
 
+    /* On small screens, turn off sticky so layout is usable */
     @media (max-width: 1100px) {
         [data-testid="column"]:has(#od-map-anchor),
         [data-testid="column"]:has(#vol-map-anchor) {
@@ -217,30 +223,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
-# =========================
-# Session state helpers for "Search to commit"
-# =========================
-def _init_state():
-    ss = st.session_state
-    ss.setdefault("t1_ready", False)       # Tab 1: results committed?
-    ss.setdefault("t2_ready", False)       # Tab 2: results committed?
-    ss.setdefault("t1_params", {})         # Tab 1: committed parameters
-    ss.setdefault("t2_params", {})         # Tab 2: committed parameters
-    ss.setdefault("t1_current", {})        # Tab 1: current (uncommitted) form values
-    ss.setdefault("t2_current", {})        # Tab 2: current (uncommitted) form values
-
-def _freeze_params(d: dict) -> dict:
-    """Normalize params for lightweight equality checks (esp. date_range)."""
-    if not isinstance(d, dict):
-        return {}
-    out = dict(d)
-    if "date_range" in out and isinstance(out["date_range"], (list, tuple)) and len(out["date_range"]) == 2:
-        # store as strings to avoid subtle dtype diffs
-        out["date_range"] = (str(out["date_range"][0]), str(out["date_range"][1]))
-    return out
-
-_init_state()
 
 # =========================
 # Title / Intro
@@ -460,35 +442,45 @@ st.markdown("## Select Page")
 tab1, tab2 = st.tabs(["Pg.1 ITERIS CLEARGUIDE", "Pg.2 KINETIC MOBILITY"])
 
 # -------------------------
-# TAB 1: Performance / Travel Time (Search-gated)
+# TAB 1: Performance / Travel Time
 # -------------------------
 with tab1:
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    status_text.text("Loading corridor performance data...")
+    progress_bar.progress(25)
 
-    # Load data once to populate controls (safe to load; results stay blank until Search)
     corridor_df = get_corridor_df()
+    progress_bar.progress(100)
 
-    # -------- Sidebar: FORM (commits only on Search) --------
-    with st.sidebar:
-        st.image("Logos/ACE-logo-HiRes.jpg", width=210)
-        st.image("Logos/CV Sync__.jpg", width=205)
+    if corridor_df.empty:
+        st.error("❌ Failed to load corridor data. Please check your data sources.")
+    else:
+        status_text.text("✅ Data loaded successfully!")
+        time.sleep(0.5)
+        progress_bar.empty()
+        status_text.empty()
 
-        with st.expander("⚙️ Pg.1 SETTINGS", expanded=True):
+        # Sidebar logos + Controls
+        with st.sidebar:
+            st.image("Logos/ACE-logo-HiRes.jpg", width=210)
+            st.image("Logos/CV Sync__.jpg", width=205)
 
-            with st.form("t1_form", clear_on_submit=False):
-                st.caption("Select Origin, Destination, and Date Range")
+            with st.expander("⚙️ Pg.1 SETTINGS", expanded=False):
+
+                st.caption("Select Route and Date Range")
                 st.caption("Data: Vehicle Speed, Delay, and Travel Time")
-                st.markdown("### 🗺️ Select Origin to Destination")
+                st.markdown("### 🗺️ Select Route")
 
                 # O-D mode (origin → destination)
                 od_mode = st.checkbox(
-                    "Origin - Destination Mode",
+                    "Route Pro Mode",
                     value=True,
-                    help="Compute KPIs using summed per-hour O-D trip times along the selected path.",
-                    key="od_mode_perf",
+                    help="Choose Your Starting Point and Ending Point to Compute Analysis",
                 )
 
                 origin, destination = None, None
-                if od_mode and not corridor_df.empty:
+                if od_mode:
                     # Use canonical order but only keep nodes present in the data
                     nodes_in_data = _canonical_order_in_data(corridor_df)
                     # Fallback to discovered order if canonical matching yields <2 nodes
@@ -504,13 +496,8 @@ with tab1:
                         st.info("Not enough nodes found to build O-D options.")
 
                 # Analysis Period
-                if corridor_df.empty or "local_datetime" not in corridor_df.columns:
-                    min_date = datetime.today().date() - timedelta(days=7)
-                    max_date = datetime.today().date()
-                else:
-                    min_date = corridor_df["local_datetime"].dt.date.min()
-                    max_date = corridor_df["local_datetime"].dt.date.max()
-
+                min_date = corridor_df["local_datetime"].dt.date.min()
+                max_date = corridor_df["local_datetime"].dt.date.max()
                 st.markdown("### 📅 Date And Time")
                 date_range = date_range_preset_controls(min_date, max_date, key_prefix="perf")
 
@@ -545,143 +532,95 @@ with tab1:
                         with c2:
                             end_hour = st.number_input("End Hour (1–24)", 1, 24, 18, step=1, key="end_hour_perf")
 
-                # Track current (uncommitted) controls for "pending changes" banner
-                t1_current = {
-                    "od_mode": od_mode,
-                    "origin": origin,
-                    "destination": destination,
-                    "date_range": tuple(date_range) if date_range else None,
-                    "granularity": granularity,
-                    "time_filter": time_filter if granularity == "Hourly" else None,
-                    "start_hour": start_hour if (granularity == "Hourly" and time_filter == "Custom Range") else None,
-                    "end_hour": end_hour if (granularity == "Hourly" and time_filter == "Custom Range") else None,
-                }
-                st.session_state["t1_current"] = t1_current
+        # -------- Main content area (with sticky right rail) --------
+        if len(date_range) == 2:
+            try:
+                base_df = corridor_df.copy()
+                if base_df.empty:
+                    st.warning("⚠️ No data for the selected segment.")
+                else:
+                    # --- Prepare working set / O-D path subset ---
+                    working_df = base_df.copy()
+                    route_label = "All Segments"
 
-                cA, cB = st.columns([1, 1])
-                with cA:
-                    t1_search = st.form_submit_button("🔎 Search (Pg.1)")
-                with cB:
-                    t1_clear = st.form_submit_button("Clear (Pg.1)", type="secondary")
+                    # ensure numeric types early to avoid dtype gotchas later
+                    for c in ["average_traveltime", "average_delay", "average_speed"]:
+                        if c in working_df.columns:
+                            working_df[c] = pd.to_numeric(working_df[c], errors="coerce")
 
-                if t1_search:
-                    st.session_state["t1_params"] = t1_current
-                    st.session_state["t1_ready"] = True
-                if t1_clear:
-                    st.session_state["t1_params"] = {}
-                    st.session_state["t1_ready"] = False
+                    desired_dir: str | None = None
 
-    # -------- Main content area (render only when "Search" committed) --------
-    t1_ready = st.session_state.get("t1_ready", False)
-    t1_params = st.session_state.get("t1_params", {})
-    t1_pending = t1_ready and _freeze_params(t1_params) != _freeze_params(st.session_state.get("t1_current", {}))
+                    if od_mode and origin and destination:
+                        # Use canonical order (restricted to nodes present)
+                        canonical = _canonical_order_in_data(base_df)
+                        # Fallback to discovered order if needed
+                        if len(canonical) < 2:
+                            canonical = _build_node_order(base_df)
 
-    if not t1_ready:
-        st.info("🚧 No results yet. Choose settings in **Pg.1 SETTINGS** and click **Search (Pg.1)** to load data.")
-    else:
-        if t1_pending:
-            st.warning("⚙️ Settings changed. Results are from your last **Search**. Press **Search (Pg.1)** to refresh.")
+                        if origin in canonical and destination in canonical:
+                            i0, i1 = canonical.index(origin), canonical.index(destination)
 
-        try:
-            base_df = corridor_df.copy() if not corridor_df.empty else pd.DataFrame()
-            if base_df.empty:
-                st.error("❌ Failed to load corridor data. Please check your data sources.")
-            else:
-                # Unpack committed params
-                od_mode = t1_params.get("od_mode", True)
-                origin = t1_params.get("origin")
-                destination = t1_params.get("destination")
-                date_range = t1_params.get("date_range")
-                granularity = t1_params.get("granularity", "Hourly")
-                time_filter = t1_params.get("time_filter")
-                start_hour = t1_params.get("start_hour")
-                end_hour = t1_params.get("end_hour")
+                            if i0 < i1:
+                                desired_dir = "nb"
+                            elif i0 > i1:
+                                desired_dir = "sb"
+                            else:
+                                desired_dir = None  # same node
 
-                # --- Prepare working set / O-D path subset ---
-                working_df = base_df.copy()
-                route_label = "All Segments"
+                            # Build segment labels in NB orientation (lower index → higher index)
+                            imin, imax = (i0, i1) if i0 < i1 else (i1, i0)
+                            candidate_segments = [f"{canonical[j]} → {canonical[j + 1]}" for j in range(imin, imax)]
 
-                # ensure numeric types early to avoid dtype gotchas later
-                for c in ["average_traveltime", "average_delay", "average_speed"]:
-                    if c in working_df.columns:
-                        working_df[c] = pd.to_numeric(working_df[c], errors="coerce")
+                            # Keep only segments that actually exist in the data
+                            seg_names_in_data = set(base_df["segment_name"].dropna().unique().tolist())
+                            path_segments = [s for s in candidate_segments if s in seg_names_in_data]
 
-                desired_dir: str | None = None
+                            if path_segments:
+                                seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
 
-                if od_mode and origin and destination:
-                    # Use canonical order (restricted to nodes present)
-                    canonical = _canonical_order_in_data(base_df)
-                    # Fallback to discovered order if needed
-                    if len(canonical) < 2:
-                        canonical = _build_node_order(base_df)
+                                # Filter rows to desired_dir using robust normalizer (avoid NB+SB mix)
+                                if "direction" in seg_df.columns and desired_dir is not None:
+                                    dnorm = normalize_dir(seg_df["direction"])
+                                    seg_df = seg_df.loc[dnorm == desired_dir].copy()
 
-                    if origin in canonical and destination in canonical:
-                        i0, i1 = canonical.index(origin), canonical.index(destination)
+                                working_df = seg_df.copy()
+                                route_label = f"{origin} → {destination}"
+                            else:
+                                st.info("No matching segments found for the selected O-D on the canonical path.")
 
-                        if i0 < i1:
-                            desired_dir = "nb"
-                        elif i0 > i1:
-                            desired_dir = "sb"
+                    # ---------- Layout: wide content + sticky right rail ----------
+                    main_col_t1, right_col_t1 = st.columns([7, 3.5], gap="large")
+
+                    # Right rail (sticky map)
+                    with right_col_t1:
+                        # Invisible anchor that tags this column as "sticky" via CSS
+                        st.markdown('<div id="od-map-anchor"></div>', unsafe_allow_html=True)
+
+                        st.markdown("##### Corridor Map", help="Stays visible while you scroll the analysis on the left.")
+                        fig_od = None
+                        if od_mode and origin and destination and origin != destination:
+                            try:
+                                fig_od = build_corridor_map(origin, destination)
+                            except Exception:
+                                fig_od = None
+
+                        # If we have a corridor map for the selected O-D, show it; else show a helpful placeholder
+                        if fig_od:
+                            try:
+                                fig_od.update_layout(height=MAP_HEIGHT, margin=dict(l=0, r=0, t=32, b=0))
+                            except Exception:
+                                pass
+                            st.markdown(f'<div class="cvag-map-card">', unsafe_allow_html=True)
+                            st.plotly_chart(fig_od, use_container_width=True, config=PLOTLY_CONFIG)
+                            st.caption(f"Corridor Segment: **{origin} → {destination}**")
+                            st.markdown("</div>", unsafe_allow_html=True)
                         else:
-                            desired_dir = None  # same node
+                            st.markdown('<div class="cvag-map-card">', unsafe_allow_html=True)
+                            st.info("Select an **Origin** and **Destination** to display the corridor map.")
+                            st.markdown("</div>", unsafe_allow_html=True)
 
-                        # Build segment labels in NB orientation (lower index → higher index)
-                        imin, imax = (i0, i1) if i0 < i1 else (i1, i0)
-                        candidate_segments = [f"{canonical[j]} → {canonical[j + 1]}" for j in range(imin, imax)]
-
-                        # Keep only segments that actually exist in the data
-                        seg_names_in_data = set(base_df["segment_name"].dropna().unique().tolist())
-                        path_segments = [s for s in candidate_segments if s in seg_names_in_data]
-
-                        if path_segments:
-                            seg_df = base_df[base_df["segment_name"].isin(path_segments)].copy()
-
-                            # Filter rows to desired_dir using robust normalizer (avoid NB+SB mix)
-                            if "direction" in seg_df.columns and desired_dir is not None:
-                                dnorm = normalize_dir(seg_df["direction"])
-                                seg_df = seg_df.loc[dnorm == desired_dir].copy()
-
-                            working_df = seg_df.copy()
-                            route_label = f"{origin} → {destination}"
-                        else:
-                            st.info("No matching segments found for the selected O-D on the canonical path.")
-
-                # ---------- Layout: wide content + sticky right rail ----------
-                main_col_t1, right_col_t1 = st.columns([7, 3.5], gap="large")
-
-                # Right rail (sticky map)
-                with right_col_t1:
-                    # Invisible anchor that tags this column as "sticky" via CSS
-                    st.markdown('<div id="od-map-anchor"></div>', unsafe_allow_html=True)
-
-                    st.markdown("##### Corridor Map", help="Stays visible while you scroll the analysis on the left.")
-                    fig_od = None
-                    if od_mode and origin and destination and origin != destination:
-                        try:
-                            fig_od = build_corridor_map(origin, destination)
-                        except Exception:
-                            fig_od = None
-
-                    # If we have a corridor map for the selected O-D, show it; else show a helpful placeholder
-                    if fig_od:
-                        try:
-                            fig_od.update_layout(height=MAP_HEIGHT, margin=dict(l=0, r=0, t=32, b=0))
-                        except Exception:
-                            pass
-                        st.markdown(f'<div class="cvag-map-card">', unsafe_allow_html=True)
-                        st.plotly_chart(fig_od, use_container_width=True, config=PLOTLY_CONFIG)
-                        st.caption(f"Corridor Segment: **{origin} → {destination}**")
-                        st.markdown("</div>", unsafe_allow_html=True)
-                    else:
-                        st.markdown('<div class="cvag-map-card">', unsafe_allow_html=True)
-                        st.info("Select an **Origin** and **Destination** to display the corridor map.")
-                        st.markdown("</div>", unsafe_allow_html=True)
-
-                # Left/main content
-                with main_col_t1:
-                    if not date_range or len(date_range) != 2:
-                        st.warning("⚠️ Please select both start and end dates to proceed.")
-                    else:
+                    # Left/main content
+                    with main_col_t1:
                         filtered_data = process_traffic_data(
                             working_df,
                             date_range,
@@ -987,27 +926,39 @@ with tab1:
                                 except Exception as e:
                                     st.error(f"❌ Error in performance analysis: {e}")
 
-        except Exception as e:
-            st.error(f"❌ Error processing traffic data: {e}")
+            except Exception as e:
+                st.error(f"❌ Error processing traffic data: {e}")
+        else:
+            st.warning("⚠️ Please select both start and end dates to proceed.")
 
 # -------------------------
-# TAB 2: Volume / Capacity (Search-gated)
+# TAB 2: Volume / Capacity
 # -------------------------
 with tab2:
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    status_text.text("Loading traffic demand data...")
+    progress_bar.progress(25)
 
-    # Load data once to populate controls; results stay blank until Search
     volume_df = get_volume_df()
+    progress_bar.progress(100)
 
-    with st.sidebar:
-        with st.expander("⚙️ Pg.2 SETTINGS", expanded=True):
+    if volume_df.empty:
+        st.error("❌ Failed to load volume data. Please check your data sources.")
+    else:
+        status_text.text("✅ Volume data loaded successfully!")
+        time.sleep(0.5)
+        progress_bar.empty()
+        status_text.empty()
 
-            with st.form("t2_form", clear_on_submit=False):
+        with st.sidebar:
+            with st.expander("⚙️ Pg.2 SETTINGS", expanded=False):
 
                 st.caption("Select Intersection(s) and Date Range")
                 st.caption("Data: Vehicle Volume")
                 intersections = ["All Intersections"] + sorted(
                     volume_df["intersection_name"].dropna().unique().tolist()
-                ) if not volume_df.empty and "intersection_name" in volume_df.columns else ["All Intersections"]
+                )
 
                 # H3-size label + selectbox with hidden built-in label
                 st.markdown("### 🚦 Select Intersection")
@@ -1018,12 +969,8 @@ with tab2:
                     label_visibility="collapsed",
                 )
 
-                if volume_df.empty or "local_datetime" not in volume_df.columns:
-                    min_date = datetime.today().date() - timedelta(days=7)
-                    max_date = datetime.today().date()
-                else:
-                    min_date = volume_df["local_datetime"].dt.date.min()
-                    max_date = volume_df["local_datetime"].dt.date.max()
+                min_date = volume_df["local_datetime"].dt.date.min()
+                max_date = volume_df["local_datetime"].dt.date.max()
 
                 st.markdown("### 📅 Date And Time")
                 date_range_vol = date_range_preset_controls(min_date, max_date, key_prefix="vol")
@@ -1036,59 +983,15 @@ with tab2:
                     key="granularity_vol",
                 )
 
-                if not volume_df.empty and "direction" in volume_df.columns:
-                    direction_options = ["All Directions"] + sorted(volume_df["direction"].dropna().unique().tolist())
-                else:
-                    direction_options = ["All Directions"]
+                direction_options = ["All Directions"] + sorted(volume_df["direction"].dropna().unique().tolist())
                 direction_filter = st.selectbox("🔄 Direction Filter", direction_options, key="direction_filter_vol")
 
-                # Track current (uncommitted) controls for "pending changes" banner
-                t2_current = {
-                    "intersection": intersection,
-                    "date_range_vol": tuple(date_range_vol) if date_range_vol else None,
-                    "granularity_vol": granularity_vol,
-                    "direction_filter": direction_filter,
-                }
-                st.session_state["t2_current"] = t2_current
-
-                cA, cB = st.columns([1, 1])
-                with cA:
-                    t2_search = st.form_submit_button("🔎 Search (Pg.2)")
-                with cB:
-                    t2_clear = st.form_submit_button("Clear (Pg.2)", type="secondary")
-
-                if t2_search:
-                    st.session_state["t2_params"] = t2_current
-                    st.session_state["t2_ready"] = True
-                if t2_clear:
-                    st.session_state["t2_params"] = {}
-                    st.session_state["t2_ready"] = False
-
-    # -------- Main content area (render only when "Search" committed) --------
-    t2_ready = st.session_state.get("t2_ready", False)
-    t2_params = st.session_state.get("t2_params", {})
-    t2_pending = t2_ready and _freeze_params(t2_params) != _freeze_params(st.session_state.get("t2_current", {}))
-
-    if not t2_ready:
-        st.info("🚧 No results yet. Choose settings in **Pg.2 SETTINGS** and click **Search (Pg.2)** to load data.")
-    else:
-        if t2_pending:
-            st.warning("⚙️ Settings changed. Results are from your last **Search**. Press **Search (Pg.2)** to refresh.")
-
-        try:
-            base_df = volume_df.copy() if not volume_df.empty else pd.DataFrame()
-            if base_df.empty:
-                st.error("❌ Failed to load volume data. Please check your data sources.")
-            else:
-                # Unpack committed params
-                intersection = t2_params.get("intersection", "All Intersections")
-                date_range_vol = t2_params.get("date_range_vol")
-                granularity_vol = t2_params.get("granularity_vol", "Hourly")
-                direction_filter = t2_params.get("direction_filter", "All Directions")
-
+        if len(date_range_vol) == 2:
+            try:
+                base_df = volume_df.copy()
                 if intersection != "All Intersections":
                     base_df = base_df[base_df["intersection_name"] == intersection]
-                if direction_filter != "All Directions" and "direction" in base_df.columns:
+                if direction_filter != "All Directions":
                     base_df = base_df[base_df["direction"] == direction_filter]
 
                 # Two-column layout with sticky right rail
@@ -1123,8 +1026,8 @@ with tab2:
 
                 # Main analysis content
                 with content_col:
-                    if not date_range_vol or len(date_range_vol) != 2:
-                        st.warning("⚠️ Please select both start and end dates to proceed with the volume analysis.")
+                    if base_df.empty:
+                        st.warning("⚠️ No volume data for the selected filters.")
                     else:
                         filtered_volume_data = process_traffic_data(base_df, date_range_vol, granularity_vol)
 
@@ -1145,7 +1048,7 @@ with tab2:
                                 <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.18);
                                             display:flex;align-items:center;justify-content:center;
                                             box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);">📊</div>
-                                <div style="font-size:1.9rem;font-weight:800; letter-spacing:.2px;">
+                                <div style="font-size:1.9rem;font-weight:800;letter-spacing:.2px;">
                                   Vehicle Volume Analysis: {intersection}
                                 </div>
                               </div>
@@ -1524,9 +1427,11 @@ with tab2:
                             # Cycle Length Recommendations section
                             render_cycle_length_section(raw)
 
-        except Exception as e:
-            st.error(f"❌ Error processing traffic data: {e}")
-            st.info("Please check your data sources and try again.")
+            except Exception as e:
+                st.error(f"❌ Error processing traffic data: {e}")
+                st.info("Please check your data sources and try again.")
+        else:
+            st.warning("⚠️ Please select both start and end dates to proceed with the volume analysis.")
 
 # =========================
 # FOOTER
