@@ -468,9 +468,9 @@ with tab1:
         st.image("Logos/CV Sync__.jpg", width=205)
 
         with st.expander("⚙️ Pg.1 SETTINGS", expanded=True):
-            st.caption("Select Origin, Destination, and Date Range")
+            st.caption("Select Route and Date Range")
             st.caption("Data: Vehicle Speed, Delay, and Travel Time")
-            st.markdown("### 🗺️ Select Origin to Destination")
+            st.markdown("## 🗺️ Select Route")
 
             od_mode = st.checkbox(
                 "Origin - Destination Mode",
@@ -501,7 +501,7 @@ with tab1:
                 min_date = corridor_df["local_datetime"].dt.date.min()
                 max_date = corridor_df["local_datetime"].dt.date.max()
 
-            st.markdown("### 📅 Date And Time")
+            st.markdown("## 📅 Date And Time")
             date_range = date_range_preset_controls(min_date, max_date, key_prefix="perf")
 
             # Analysis Settings
@@ -963,7 +963,7 @@ with tab2:
                 volume_df["intersection_name"].dropna().unique().tolist()
             ) if not volume_df.empty and "intersection_name" in volume_df.columns else ["All Intersections"]
 
-            st.markdown("### 🚦 Select Intersection")
+            st.markdown("## 🚦 Select Intersection")
             intersection = st.selectbox(
                 "🚦 Select Intersection",
                 intersections,
@@ -978,7 +978,7 @@ with tab2:
                 min_date = volume_df["local_datetime"].dt.date.min()
                 max_date = volume_df["local_datetime"].dt.date.max()
 
-            st.markdown("### 📅 Date And Time")
+            st.markdown("## 📅 Date And Time")
             date_range_vol = date_range_preset_controls(min_date, max_date, key_prefix="vol")
 
             st.markdown("### Granularity")
@@ -1019,7 +1019,7 @@ with tab2:
         st.info("🚧 No results yet. Choose settings in **Pg.2 SETTINGS** and click **Search (Pg.2)** to load data.")
     else:
         if t2_pending:
-            st.warning("⚙️ Press **Search (Pg.2)** to refresh.")
+            st.warning("⚙️ Press **Search** to refresh.")
 
         try:
             base_df = volume_df.copy() if not volume_df.empty else pd.DataFrame()
