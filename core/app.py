@@ -47,22 +47,37 @@ st.set_page_config(
 @contextlib.contextmanager
 def cad_loader(title: str = "Processing…"):
     """Progress loader that logs steps like CAD/Civil tools."""
-    st.markdown(f"### {title}")
-    log = st.container()
-    bar = st.progress(0)
+    # Create placeholders that we can clear later
+    title_placeholder = st.empty()
+    log_placeholder = st.empty()
+    bar_placeholder = st.empty()
+
+    # Show initial state
+    with title_placeholder:
+        st.markdown(f"### {title}")
+
+    log_container = log_placeholder.container()
+    progress_bar = bar_placeholder.progress(0)
 
     def step(msg: str, pct: int | float):
-        with log:
+        with log_container:
             st.write(f"• {msg}")
-        bar.progress(int(max(0, min(100, pct))))
+        progress_bar.progress(int(max(0, min(100, pct))))
 
     try:
         yield step
-        bar.progress(100)
-        with log:
+        progress_bar.progress(100)
+        with log_container:
             st.success("✔️ Done")
+
+        # Wait briefly to show completion, then clear everything
+        time.sleep(0.5)
+        title_placeholder.empty()
+        log_placeholder.empty()
+        bar_placeholder.empty()
+
     except Exception as e:
-        with log:
+        with log_container:
             st.error(f"❌ {e}")
         raise
 
@@ -677,7 +692,7 @@ with tab1:
                         st.warning("⚠️ Please select both start and end dates to proceed.")
                     else:
                         # ---- CAD-style loader starts here ----
-                        with cad_loader("Running Travel Time Analysis") as step:
+                        with cad_loader("Fetching Data...") as step:
                             step("Filtering by date range & aggregating", 20)
                             filtered_data = process_traffic_data(
                                 working_df,
@@ -1106,7 +1121,7 @@ with tab2:
                         st.warning("⚠️ Please select both start and end dates to proceed with the volume analysis.")
                     else:
                         # ---- CAD-style loader starts here ----
-                        with cad_loader("Running Volume Analysis") as step:
+                        with cad_loader("Fetching Data...") as step:
                             step("Applying filters & aggregations", 20)
                             filtered_volume_data = process_traffic_data(base_df, date_range_vol, granularity_vol)
 
