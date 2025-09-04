@@ -978,21 +978,24 @@ with tab2:
                     base_df = base_df[base_df["intersection_name"] == intersection]
                 if direction_filter != "All Directions":
                     base_df = base_df[base_df["direction"] == direction_filter]
-                    # Right-side map column for Tab 2 (selected intersection)
-                if intersection != "All Intersections":
-                    try:
-                        fig_int = build_intersection_map(intersection)
-                    except Exception:
-                            fig_int = None
-                    pad2, map_col2 = st.columns([7, 3])  # 70% content • 30% map
-                    with map_col2:
-                        if fig_int:
-                                st.plotly_chart(fig_int, use_container_width=True)
-                        else:
-                                st.caption("Map: update intersection mapping or check segment GeoJSON.")
+
+                # Right-side overview map: show ALL intersections and highlight the current selection
+                try:
+                    fig_over = build_intersections_overview(
+                        selected_label=None if intersection == "All Intersections" else intersection
+                    )
+                except Exception:
+                    fig_over = None
+                pad2, map_col2 = st.columns([7, 3])  # 70% content • 30% map
+                with map_col2:
+                    if fig_over:
+                        st.plotly_chart(fig_over, use_container_width=True)
+                    else:
+                        st.caption("Map: unable to render overview (missing coordinates/GeoJSON).")
 
                 if base_df.empty:
                     st.warning("⚠️ No volume data for the selected filters.")
+
                 else:
                     filtered_volume_data = process_traffic_data(base_df, date_range_vol, granularity_vol)
 
