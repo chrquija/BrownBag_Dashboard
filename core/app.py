@@ -53,7 +53,7 @@ PLOTLY_CONFIG = {
     "displaylogo": False,
     "modeBarButtonsToRemove": ["lasso2d", "select2d", "toggleSpikelines"]
 }
-MAP_HEIGHT = 700  # default map height (px) for the right rail
+MAP_HEIGHT = 900  # default map height (px) for the right rail
 
 # =========================
 # Constants / Config
