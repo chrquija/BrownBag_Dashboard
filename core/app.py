@@ -30,8 +30,7 @@ from sidebar_functions import (
 from cycle_length_recommendations import render_cycle_length_section
 
 #Map
-from Map import build_corridor_map, build_intersection_map
-
+from Map import build_corridor_map, build_intersection_map, build_intersections_overview
 
 # =========================
 # Page configuration
