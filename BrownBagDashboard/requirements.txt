@@ -1,6 +1,5 @@
-streamlit
+dash>=2.14
+plotly>=5.18
 pandas
-plotly
 numpy
 requests
-pydeck
