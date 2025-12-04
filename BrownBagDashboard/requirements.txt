@@ -3,3 +3,4 @@ plotly>=5.18
 pandas
 numpy
 requests
+openpyxl
