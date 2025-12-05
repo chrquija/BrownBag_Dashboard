@@ -89,19 +89,21 @@ def main():
     secondary_street = "W SAN RAFAEL RD"
     tertiary_street = "TRAMWAY RD"
     city = "City of Palm Springs"
-    date_range = "10-01 -> 11-30 2025"
+    date_range = "10-01-2025 to 11-30-2025"
     coordinates = "33.85832, -116.55739"
+    Data_Source = "ITERIS CLEARGUIDE"
     # Sidebar: move static metadata out of the main header to reduce crowding
     st.sidebar.markdown("## Location Info")
     st.sidebar.markdown(
         f"""
-- **Corridor:** {corridor}
+- **Data Source:** {Data_Source}
+- **Date Range:** {date_range}
+- **City:** {city}
 - **Intersection:** {intersection}
+- **Corridor:** {corridor}
 - **Primary:** {primary_street}
 - **Secondary:** {secondary_street}
 - **Tertiary:** {tertiary_street}
-- **City:** {city}
-- **Date Range:** {date_range}
 - **Coordinates:** {coordinates}
         """
     )
@@ -159,15 +161,15 @@ def main():
         with st.expander("Location details"):
             st.markdown(
                 f"""
-**Corridor:** {corridor}  
-**Intersection:** {intersection}  
-**Primary Street:** {primary_street}  
-**Secondary Street:** {secondary_street}  
-**Tertiary Street:** {tertiary_street}  
-**City:** {city}  
-**Date Range:** {date_range}  
-**Coordinates:** {coordinates}
-                """
+    - **Corridor:** {corridor}
+    - **Intersection:** {intersection}
+    - **Primary:** {primary_street}
+    - **Secondary:** {secondary_street}
+    - **Tertiary:** {tertiary_street}
+    - **City:** {city}
+    - **Date Range:** {date_range}
+    - **Coordinates:** {coordinates}
+                    """
             )
 
     # Right rail layout: create persistent two-column canvas
@@ -214,7 +216,7 @@ def main():
         else:
             df_meta, df_int, df_app, df_mov = data
 
-        st.caption(f"Data source: {DATA_URL}")
+        st.caption(f"Data source: [ITERIS CLEARGUIDE]({DATA_URL})")
 
         # 1. High-level KPIs (Intersection Sheet)
         st.markdown("---")
