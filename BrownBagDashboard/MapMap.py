@@ -14,10 +14,13 @@ def render_map(
     label: str = "Intersection",
     registry: list = None,
     use_satellite: bool = False,
+    show_labels: bool = True,
     highlight_labels: list = None,
     study_period: str = None,
     intersections: list = None,
     segments: pd.DataFrame = None,
+    intersections_title: str = "Intersections",
+    label_size: int = 11,
 ):
     """Render an interactive map centered on the given coordinates using Folium.
 
@@ -170,12 +173,12 @@ def render_map(
             fill=True,
             fill_color=color,
             fill_opacity=0.7,
-            tooltip=row['name'],
+            tooltip=row['name'] if show_labels else None,
             popup=folium.Popup(row['name'], parse_html=True)
         ).add_to(m)
         
         # Always visible text labels for highlighted intersections
-        if is_highlighted:
+        if is_highlighted and show_labels:
             label_color = "white" if use_satellite else "#E63946"
             label_shadow = "1px 1px 2px black" if use_satellite else "none"
             label_bg = "rgba(0,0,0,0.4)" if use_satellite else "transparent"
@@ -188,7 +191,7 @@ def render_map(
                     html=f"""
                         <div style="
                             font-family: sans-serif; 
-                            font-size: 11pt; 
+                            font-size: {label_size}pt; 
                             color: {label_color}; 
                             font-weight: bold; 
                             text-shadow: {label_shadow};
@@ -212,6 +215,73 @@ def render_map(
         popup="Indian Wells Tennis Garden"
     ).add_to(m)
 
+    # Special landmark: Coachella Valley Music Festival
+    folium.Marker(
+        [33.6784, -116.2372],
+        icon=folium.Icon(color='purple', icon='music', prefix='fa'), # Using FontAwesome music icon
+        tooltip="Coachella Valley Music Festival",
+        popup="Coachella Valley Music Festival (Empire Polo Club)"
+    ).add_to(m)
+
+    # Festival Area Square (Empire Polo Club grounds)
+    folium.Rectangle(
+        bounds=[[33.671, -116.247], [33.685, -116.230]],
+        color="purple",
+        weight=2,
+        fill=True,
+        fill_opacity=0.1,
+        tooltip="Festival Grounds (Empire Polo Club)",
+        popup="Empire Polo Club grounds"
+    ).add_to(m)
+
+
+    # Add Legend to the map
+    legend_html = """
+    <div style="
+        position: fixed; 
+        top: 10px; 
+        right: 10px; 
+        width: auto; 
+        height: auto; 
+        z-index:9999; 
+        font-size:12px;
+        background-color: white; 
+        padding: 10px; 
+        border: 2px solid grey; 
+        border-radius: 6px;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+    ">
+        <div style="font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 3px;">Map Legend</div>
+        <div style="display: grid; grid-template-columns: 1fr; gap: 5px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="height: 12px; width: 12px; background-color: rgb(230, 57, 70); border-radius: 50%; display: inline-block; border: 1px solid white; box-shadow: 0 0 0 1px rgb(230, 57, 70);"></span>
+                <span style="font-weight: 600;">Active Intersection(s)</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="height: 12px; width: 12px; background-color: rgb(31, 69, 130); border-radius: 50%; display: inline-block; border: 1px solid white; box-shadow: 0 0 0 1px rgb(31, 69, 130);"></span>
+                <span style="font-weight: 600;">Other Intersections</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.1rem; line-height: 1; color: orange;">★</span>
+                <span style="font-weight: 600;">Tennis Garden</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.1rem; line-height: 1; color: purple;">♫</span>
+                <span style="font-weight: 600;">Music Festival</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="height: 12px; width: 12px; border: 2px solid purple; background-color: rgba(128, 0, 128, 0.1); display: inline-block;"></span>
+                <span style="font-weight: 600;">Festival Grounds</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="height: 4px; width: 20px; background-color: rgba(31, 69, 130, 0.4); display: inline-block; border-radius: 2px;"></span>
+                <span style="font-weight: 600;">Segment ADT (Hover)</span>
+            </div>
+        </div>
+    </div>
+    """
+    m.get_root().html.add_child(folium.Element(legend_html))
+
     # Display Study Period and Intersections KPIs above the map
     if study_period or intersections:
         # Build the HTML string without leading indentation to avoid Markdown code block triggers
@@ -225,7 +295,7 @@ def render_map(
             html += "<div style='height: 2px; background: #1f4582; opacity: 0.2; margin: 16px 0;'></div>"
             
         if intersections:
-            html += f'<div style="font-size: 0.95rem; color: #1f4582; text-transform: uppercase; font-weight: 900; letter-spacing: 2px; margin-bottom: 12px;">Intersections</div>'
+            html += f'<div style="font-size: 0.95rem; color: #1f4582; text-transform: uppercase; font-weight: 900; letter-spacing: 2px; margin-bottom: 12px;">{intersections_title}</div>'
             html += f'<div style="text-align: left; max-height: 200px; overflow-y: auto; padding: 0 5px;">'
             for item in intersections:
                 # Handle both simple strings and dictionaries for backward compatibility
@@ -257,29 +327,3 @@ def render_map(
         key=f"map-{use_satellite}-{latitude}-{longitude}-{zoom}-{label}",
         returned_objects=[] # We don't need any data back from the map
     )
-
-    # Display Map Legend under the map
-    legend_html = (
-        '<div style="display: flex; flex-direction: column; align-items: center; padding: 12px; background: var(--secondary-background-color); border-radius: 12px; margin-top: 14px; border: 1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0,0,0,0.05);">'
-        '<div style="font-weight: bold; color: var(--text-color); margin-bottom: 10px; border-bottom: 1px solid var(--border-color); width: 100%; text-align: center; padding-bottom: 6px; font-size: 0.9rem;">Map Legend</div>'
-        '<div style="display: flex; justify-content: center; gap: 20px; font-size: 0.85rem; width: 100%;">'
-        '<div style="display: flex; align-items: center; gap: 8px;">'
-        '<span style="height: 12px; width: 12px; background-color: rgb(230, 57, 70); border-radius: 50%; display: inline-block; border: 2px solid white; box-shadow: 0 0 0 1px rgb(230, 57, 70);"></span>'
-        '<span style="font-weight: 600; color: var(--text-color);">Active Intersection(s)</span>'
-        '</div>'
-        '<div style="display: flex; align-items: center; gap: 8px;">'
-        '<span style="height: 12px; width: 12px; background-color: rgb(31, 69, 130); border-radius: 50%; display: inline-block; border: 2px solid white; box-shadow: 0 0 0 1px rgb(31, 69, 130);"></span>'
-        '<span style="font-weight: 600; color: var(--text-color);">Other Intersections</span>'
-        '</div>'
-        '<div style="display: flex; align-items: center; gap: 8px;">'
-        '<span style="font-size: 1.1rem; line-height: 1; color: var(--text-color);">★</span>'
-        '<span style="font-weight: 600; color: var(--text-color);">Tennis Garden</span>'
-        '</div>'
-        '<div style="display: flex; align-items: center; gap: 8px;">'
-        '<span style="height: 4px; width: 20px; background-color: rgba(31, 69, 130, 0.4); display: inline-block; border-radius: 2px;"></span>'
-        '<span style="font-weight: 600; color: var(--text-color);">Segment ADT (Hover)</span>'
-        '</div>'
-        '</div>'
-        '</div>'
-    )
-    st.markdown(legend_html, unsafe_allow_html=True)
