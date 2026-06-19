@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
+
 def _apply_comparison_layout(fig, y_axis_label, tickformat=None):
     """
     Applies a standard, clean layout for comparison charts in the apples-to-apples tab.
@@ -45,42 +46,82 @@ def _apply_comparison_layout(fig, y_axis_label, tickformat=None):
         height=550
     )
 
-def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_map, direction_colors=None):
+
+def render_apples_tab(registry, get_intersection_data_func, get_meta_value_func, direction_map, direction_colors=None,
+                      manual_selection=None, load_daily_func=None):
     """
-    Renders a tab for comparing two different time periods (datasets) 
+    Renders a tab for comparing two different time periods (datasets)
     for the same intersection (Apples-to-Apples Comparison).
     """
+    import datetime
     if direction_colors is None:
         direction_colors = {}
+
     # 1. Selection logic
-    # Find intersections that have multiple datasets for comparison
-    comparable_intersections = [i for i in registry if len(i["datasets"]) > 1]
-    
+    # Find intersections that have multiple datasets for comparison OR daily data
+    comparable_intersections = [i for i in registry if
+                                len(i.get("datasets", [])) > 1 or i.get("daily_data", {}).get("available")]
+
     if not comparable_intersections:
-        st.info("No intersections with multiple datasets found for comparison in the current registry.")
+        st.info("No intersections with multiple datasets or daily data found for comparison.")
         return
 
     # 2. Create container for results (this will appear first in the UI)
     results_container = st.container()
 
-    # 3. Selection widgets at the bottom
-    st.markdown("---")
-    st.write("### Comparison Selection")
-    col_sel1, col_sel2, col_sel3 = st.columns([2, 1, 1])
-    
-    with col_sel1:
-        selected_label = st.selectbox(
-            "Select Intersection",
-            options=[i["label"] for i in comparable_intersections],
-            key="apples_intersection_selector"
-        )
-        selected_intersection = next(i for i in comparable_intersections if i["label"] == selected_label)
-    
-    dataset_options = [d["date_label"] for d in selected_intersection["datasets"]]
-    with col_sel2:
-        p1_label = st.selectbox("Baseline Period (P1)", options=dataset_options, index=0)
-    with col_sel3:
-        p2_label = st.selectbox("Comparison Period (P2)", options=dataset_options, index=min(1, len(dataset_options)-1))
+    # 3. Selection widgets
+    if manual_selection:
+        selected_label = manual_selection.get("label")
+        selected_intersection = next((i for i in comparable_intersections if i["label"] == selected_label),
+                                     comparable_intersections[0])
+        p1_label = manual_selection.get("p1")
+        p2_label = manual_selection.get("p2")
+        use_daily = False  # Manual selection currently only supports predefined datasets
+    else:
+        st.markdown("---")
+        st.write("### Comparison Selection")
+        col_sel1, col_sel2, col_sel3 = st.columns([2, 1, 1])
+
+        with col_sel1:
+            selected_label = st.selectbox(
+                "Select Intersection",
+                options=[i["label"] for i in comparable_intersections],
+                key="apples_intersection_selector"
+            )
+            selected_intersection = next(i for i in comparable_intersections if i["label"] == selected_label)
+
+        daily_config = selected_intersection.get("daily_data", {})
+        use_daily = daily_config.get("available", False)
+
+        if use_daily:
+            min_date = datetime.datetime.strptime(daily_config["date_range"]["start"], "%Y-%m-%d").date()
+            max_date = datetime.datetime.strptime(daily_config["date_range"]["end"], "%Y-%m-%d").date()
+
+            with col_sel2:
+                st.write("**Baseline Period (P1)**")
+                p1_start = st.date_input("Start Date (P1)", value=min_date, min_value=min_date, max_value=max_date,
+                                         key="p1_start")
+                p1_end = st.date_input("End Date (P1)", value=min_date + datetime.timedelta(days=6), min_value=min_date,
+                                       max_value=max_date, key="p1_end")
+                p1_label = f"{p1_start} to {p1_end}"
+            with col_sel3:
+                st.write("**Comparison Period (P2)**")
+                p2_start = st.date_input("Start Date (P2)", value=max_date - datetime.timedelta(days=6),
+                                         min_value=min_date, max_value=max_date, key="p2_start")
+                p2_end = st.date_input("End Date (P2)", value=max_date, min_value=min_date, max_value=max_date,
+                                       key="p2_end")
+                p2_label = f"{p2_start} to {p2_end}"
+
+            if p1_start > p1_end or p2_start > p2_end:
+                st.error("Start date must be before or equal to end date.")
+                return
+        else:
+            dataset_options = [d["date_label"] for d in selected_intersection["datasets"]]
+            with col_sel2:
+                p1_label = st.selectbox("Baseline Period (P1)", options=dataset_options, index=0)
+            with col_sel3:
+                p2_label = st.selectbox("Comparison Period (P2)", options=dataset_options,
+                                        index=min(1, len(dataset_options) - 1))
 
     if p1_label == p2_label:
         st.warning("Please select two different time periods to generate a comparison.")
@@ -89,12 +130,15 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
     # 4. Fill results container
     with results_container:
         # Data Loading
-        d1 = next(d for d in selected_intersection["datasets"] if d["date_label"] == p1_label)
-        d2 = next(d for d in selected_intersection["datasets"] if d["date_label"] == p2_label)
-
         with st.spinner(f"Loading data for {p1_label} and {p2_label}..."):
-            data1 = load_data_func(d1["url"])
-            data2 = load_data_func(d2["url"])
+            if use_daily and load_daily_func:
+                data1 = load_daily_func(daily_config, p1_start, p1_end)
+                data2 = load_daily_func(daily_config, p2_start, p2_end)
+            else:
+                d1 = next(d for d in selected_intersection["datasets"] if d["date_label"] == p1_label)
+                d2 = next(d for d in selected_intersection["datasets"] if d["date_label"] == p2_label)
+                data1 = get_intersection_data_func(selected_intersection, d1)
+                data2 = get_intersection_data_func(selected_intersection, d2)
 
         if data1 is None or data2 is None:
             st.error("Could not load data for one or both time periods. Please check the data source.")
@@ -108,7 +152,7 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
         dr2 = f"{get_meta_value_func(df_meta2, 'Start Date')} to {get_meta_value_func(df_meta2, 'End Date')}"
 
         st.write("### High-Level KPI Comparison")
-        
+
         kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
 
         def get_delta_str(v1, v2, is_pct=False):
@@ -117,7 +161,7 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
             if is_pct:
                 # If values are on 0-1 scale, diff * 100 is percentage points
                 if v1 < 1 and v2 < 1:
-                    return f"{diff*100:+.1f}% pts"
+                    return f"{diff * 100:+.1f}% pts"
                 return f"{diff:+.1f}%"
             return f"{diff:+.1f}" if abs(diff) < 1000 else f"{int(diff):+,}"
 
@@ -140,21 +184,21 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
         for col_name, label, column, is_pct, is_int, d_color in metrics:
             v1 = df_int1[col_name].iloc[0]
             v2 = df_int2[col_name].iloc[0]
-            
+
             with column:
                 # Calculate delta for styling
                 diff = v2 - v1 if not (pd.isna(v1) or pd.isna(v2)) else 0
                 delta_str = get_delta_str(v1, v2, is_pct)
-                
+
                 # Determine color logic consistent with st.metric
                 if delta_str is None or diff == 0:
                     d_style = "color: gray;"
                 else:
                     is_positive = diff > 0
                     if d_color == "normal":
-                        color = "#10b981" if is_positive else "#ef4444" # green vs red
-                    else: # inverse
-                        color = "#ef4444" if is_positive else "#10b981" # red vs green
+                        color = "#10b981" if is_positive else "#ef4444"  # green vs red
+                    else:  # inverse
+                        color = "#ef4444" if is_positive else "#10b981"  # red vs green
                     d_style = f"color: {color}; font-weight: 700;"
 
                 st.markdown(f"""
@@ -290,7 +334,7 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
             mov_metric_map["Vehicles"] = "Turning Movement Range 1"
 
         col_mov_f1, col_mov_f2 = st.columns([1, 1])
-        
+
         # Prep df_mov data for filtering and mapping
         def prep_mov_df(df, label):
             df_new = df.copy()
@@ -304,7 +348,7 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
                 "Thru": "Thru", "Through": "Thru", "T": "Thru",
                 "Left": "Left", "Left Turn": "Left", "L": "Left",
                 "Right": "Right", "Right Turn": "Right", "R": "Right",
-                "U-Turn": "Left" # Group U-turns with Lefts for simplicity if they exist
+                "U-Turn": "Left"  # Group U-turns with Lefts for simplicity if they exist
             }
             df_new["Movement"] = df_new["Movement"].map(mov_norm).fillna(df_new["Movement"])
             return df_new
@@ -340,7 +384,7 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
         filtered_mov_df = df_comp_mov[
             (df_comp_mov["Approach Full"].isin(selected_mov_apps)) &
             (df_comp_mov["Movement"].isin(standard_movements))
-        ].copy()
+            ].copy()
 
         # Handle Percentages (Divide by 100 if needed)
         is_percentage = "Split Failure" in selected_mov_metric_label or "Arrivals On Green" in selected_mov_metric_label
@@ -375,14 +419,13 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
         df_p1 = filtered_mov_df[filtered_mov_df["Period"] == p1_label].copy()
         df_p2 = filtered_mov_df[filtered_mov_df["Period"] == p2_label].copy()
         df_merge = pd.merge(df_p1, df_p2, on=["Approach Full", "Movement"], suffixes=("_p1", "_p2"))
-        
 
         # Map deltas and raw values back to the P2 rows in the original filtered_mov_df
         labels_map = {}
         for _, row in df_merge.iterrows():
             v1 = row[selected_mov_metric_col + "_p1"]
             v2 = row[selected_mov_metric_col + "_p2"]
-            
+
             # Formatting for the count value
             if "Vehicles" in selected_mov_metric_label:
                 v2_str = f"{v2:,.0f}"
@@ -395,10 +438,10 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
             if v1 != 0 and not pd.isna(v1) and not pd.isna(v2):
                 delta_pct = (v2 - v1) / v1
                 delta_str = f"{delta_pct:+.0%}"
-                
+
                 # Determine if increase is good or bad (inverse metrics: Delay, Split Failure)
                 is_inverse = "Delay" in selected_mov_metric_label or "Split Failure" in selected_mov_metric_label
-                
+
                 # Determine delta color
                 if delta_pct >= 0.005:
                     delta_color = "red" if is_inverse else "green"
@@ -406,16 +449,16 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
                     delta_color = "green" if is_inverse else "red"
                 else:
                     delta_color = "inherit"
-                
+
                 # Combine the raw value and the % change
                 combined_label = f"{v2_str}<br><span style='color:{delta_color}'>({delta_str})</span>"
             else:
                 combined_label = v2_str
-                
+
             labels_map[(row["Approach Full"], row["Movement"])] = combined_label
 
         filtered_mov_df["Chart Label"] = filtered_mov_df.apply(
-            lambda x: labels_map.get((x["Approach Full"], x["Movement"]), "") if x["Period"] == p2_label else "", 
+            lambda x: labels_map.get((x["Approach Full"], x["Movement"]), "") if x["Period"] == p2_label else "",
             axis=1
         )
 
@@ -427,27 +470,27 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
             color="Period",
             facet_col="Approach Full",
             facet_col_wrap=2,
-            facet_row_spacing=0.15, # Increase vertical gap between rows
+            facet_row_spacing=0.15,  # Increase vertical gap between rows
             barmode="group",
             title=f"<b>{selected_label}</b><br><sup>Movement Comparison: {selected_mov_metric_label} | {p1_label} vs {p2_label}</sup>",
             labels={
-                selected_mov_metric_col: selected_mov_metric_label, 
+                selected_mov_metric_col: selected_mov_metric_label,
                 "Movement": "Movement",
                 "Approach Full": "Approach"
             },
-            color_discrete_map={p1_label: "#94a3b8", p2_label: "#1f4582"}, # Consistent Period Colors (Light/Dark)
+            color_discrete_map={p1_label: "#94a3b8", p2_label: "#1f4582"},  # Consistent Period Colors (Light/Dark)
             category_orders={"Movement": standard_movements},
-            text="Chart Label" # Show both raw count and % change on the P2 bar
+            text="Chart Label"  # Show both raw count and % change on the P2 bar
         )
 
         # Clean up facet titles and styling
         # Move facet titles up to avoid intersecting with borders
         fig_mov_comp.for_each_annotation(lambda a: a.update(
-            text=f"<b>{a.text.split('=')[-1]}</b>", 
+            text=f"<b>{a.text.split('=')[-1]}</b>",
             font=dict(size=18),
-            y=a.y + 0.02 # Bump titles up slightly (reduced from 0.04 to give more headroom)
+            y=a.y + 0.02  # Bump titles up slightly (reduced from 0.04 to give more headroom)
         ))
-        
+
         # Ensure y-axis labels and formatting are correct
         _apply_comparison_layout(fig_mov_comp, mov_y_label, tickformat=mov_tick_fmt)
 
@@ -467,11 +510,11 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
                 yanchor='top'
             ),
             legend=dict(
-                orientation="h", 
-                yanchor="top", 
-                y=-0.15, # Moved to bottom to prevent collision
-                xanchor="center", 
-                x=0.5, 
+                orientation="h",
+                yanchor="top",
+                y=-0.15,  # Moved to bottom to prevent collision
+                xanchor="center",
+                x=0.5,
                 title=None,
                 font=dict(size=20),
                 itemsizing='constant'
@@ -479,27 +522,27 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
             hovermode="x unified",
             uniformtext_minsize=7,
             uniformtext_mode='show',
-            height=700 # Keep height stable regardless of approach count to prevent jumping UI
+            height=700  # Keep height stable regardless of approach count to prevent jumping UI
         )
-        
+
         # Remove "Movement" title from each facet x-axis to reduce clutter
         # and ENSURE labels show on all subplots (matches all x-axes)
         fig_mov_comp.update_xaxes(
-            title=None, 
-            showline=True, 
-            linewidth=1, 
+            title=None,
+            showline=True,
+            linewidth=1,
             mirror=True,
-            showticklabels=True, # Force labels on all subplots
+            showticklabels=True,  # Force labels on all subplots
             tickfont=dict(size=14)
         )
         fig_mov_comp.update_yaxes(
-            showline=True, 
-            linewidth=1, 
+            showline=True,
+            linewidth=1,
             mirror=True,
             tickfont=dict(size=14),
             title_font=dict(size=18)
         )
-        
+
         fig_mov_comp.update_traces(
             textfont_size=14,
             textposition="outside",
@@ -520,7 +563,7 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
             # Calculate Deltas for the selected metric
             df_p1 = filtered_mov_df[filtered_mov_df["Period"] == p1_label].copy()
             df_p2 = filtered_mov_df[filtered_mov_df["Period"] == p2_label].copy()
-            
+
             # Merge to compare
             df_delta = pd.merge(
                 df_p1[["Approach Full", "Movement", selected_mov_metric_col]],
@@ -528,26 +571,26 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
                 on=["Approach Full", "Movement"],
                 suffixes=("_p1", "_p2")
             )
-            
+
             # Use period labels and metric name for column headers as requested (e.g. "2025 Volume")
             metric_display_name = "Volume" if selected_mov_metric_label == "Vehicles" else selected_mov_metric_label
             col_p1 = f"{p1_label} {metric_display_name}"
             col_p2 = f"{p2_label} {metric_display_name}"
-            
+
             # Rename for display
             df_delta = df_delta.rename(columns={
                 "Approach Full": "Approach",
                 selected_mov_metric_col + "_p1": col_p1,
                 selected_mov_metric_col + "_p2": col_p2
             })
-            
+
             df_delta["Change"] = df_delta[col_p2] - df_delta[col_p1]
             if is_percentage:
-                df_delta["% Change"] = df_delta["Change"] # It's already percentage points
+                df_delta["% Change"] = df_delta["Change"]  # It's already percentage points
             else:
                 # Avoid division by zero
                 df_delta["% Change"] = df_delta.apply(
-                    lambda row: (row["Change"] / row[col_p1]) if row[col_p1] != 0 else 0, 
+                    lambda row: (row["Change"] / row[col_p1]) if row[col_p1] != 0 else 0,
                     axis=1
                 )
 
@@ -560,7 +603,7 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
             })
 
             # --- Handle background gradient coloring (requires matplotlib) ---
-            # NOTE: We MUST check for matplotlib explicitly BEFORE calling background_gradient, 
+            # NOTE: We MUST check for matplotlib explicitly BEFORE calling background_gradient,
             # because Pandas may defer the actual import until rendering time (st.dataframe),
             # which makes a try-except block around background_gradient alone insufficient.
             try:
@@ -575,7 +618,7 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
                     styler = styler.background_gradient(subset=["Change"], cmap=cmap_name)
                 except Exception:
                     matplotlib_available = False
-            
+
             if not matplotlib_available:
                 # Fallback to simple color highlights if matplotlib is not available
                 def color_delta(val):
@@ -583,11 +626,11 @@ def render_apples_tab(registry, load_data_func, get_meta_value_func, direction_m
                     is_inv = "Delay" in selected_mov_metric_label or "Split Failure" in selected_mov_metric_label
                     # Red highlight for "bad" change, Green for "good" change
                     if is_inv:
-                        bg_color = "#fecaca" if val > 0 else "#bbf7d0" # Light Red/Green
+                        bg_color = "#fecaca" if val > 0 else "#bbf7d0"  # Light Red/Green
                     else:
-                        bg_color = "#bbf7d0" if val > 0 else "#fecaca" # Light Green/Red
+                        bg_color = "#bbf7d0" if val > 0 else "#fecaca"  # Light Green/Red
                     return f"background-color: {bg_color}"
-                
+
                 # Check pandas version for styling method (applymap vs map)
                 if hasattr(styler, 'map'):
                     styler = styler.map(color_delta, subset=["Change"])
